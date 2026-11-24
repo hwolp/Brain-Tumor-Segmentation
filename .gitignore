@@ -11,7 +11,7 @@ __pycache__/
 htmlcov/
 
 # Node / Frontend
-FE/node_modules/
+node_modules/
 FE/dist/
 FE/.vite/
 FE/coverage/
@@ -22,6 +22,8 @@ FE/blob-report/
 # Environment & Secrets
 .env
 .env.*
+BE/worker.env
+!BE/worker.env.example
 !.env.example
 !BE/.env.example
 !FE/.env.example
