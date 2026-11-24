@@ -13,7 +13,7 @@ from starlette.datastructures import UploadFile
 
 from app.core.errors import AppError
 from app.core.storage import LocalStorageAdapter
-from app.services.nifti_validator import (
+from app.validators.nifti_validator import (
     VolumeGeometry,
     check_geometry_compatibility,
     check_model_profile,

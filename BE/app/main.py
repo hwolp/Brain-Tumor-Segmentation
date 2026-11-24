@@ -35,8 +35,8 @@ from app.core.errors import register_exception_handlers
 from app.core.logging import configure_logging, request_id_var, resolve_request_id
 from app.core.security import load_jwt_key_material
 from app.core.storage import LocalStorageAdapter
-from app.services.file_cleanup_service import run_orphan_cleanup
-from app.services.job_service import reap_expired_attempts
+from app.services.inference_job_service import reap_expired_attempts
+from app.services.stored_file_service import StoredFileService
 
 logger = logging.getLogger(__name__)
 _MULTIPART_UPLOAD_PATH_RE = re.compile(
@@ -181,9 +181,7 @@ async def _orphan_cleanup_loop(application: FastAPI) -> None:
             continue
         try:
             with session_factory() as db:
-                run_orphan_cleanup(
-                    db,
-                    storage,
+                StoredFileService(db, storage).run_orphan_cleanup(
                     max_age_seconds=settings.STAGING_ORPHAN_MAX_AGE_SECONDS,
                     login_attempt_max_age_seconds=settings.LOGIN_RATE_LIMIT_WINDOW_SECONDS,
                 )
@@ -272,6 +270,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         allow_credentials=True,
         allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
         allow_headers=["Authorization", "Content-Type", "Idempotency-Key", "X-Request-ID"],
+        expose_headers=["X-Request-ID", "Retry-After"],
     )
     application.add_middleware(RequestContextMiddleware)
 

@@ -172,6 +172,28 @@ async function mockLiveViewerApi(options: {
         page_size: pageSize,
       });
     }
+    const delMaskMatch = path.match(/\/mask-versions\/([^/]+)$/);
+    if (delMaskMatch && method === 'DELETE') {
+      const targetId = decodeURIComponent(delMaskMatch[1]!);
+      const idx = versionDtos.findIndex((item) => item.id === targetId);
+      if (idx === -1) {
+        return json({ error: { code: 'mask_version_not_found' } }, 404);
+      }
+      if (versionDtos[idx]!.source !== 'manual') {
+        return json({ error: { code: 'ai_mask_not_deletable' } }, 409);
+      }
+      versionDtos.splice(idx, 1);
+      return json(
+        {
+          resource_type: 'mask_version',
+          resource_id: targetId,
+          status: 'deleted',
+          files_cleaned: 1,
+          message: 'Đã xóa phiên bản mask thủ công.',
+        },
+        202,
+      );
+    }
     const fileMatch = path.match(/\/files\/([^/]+)\/content$/);
     if (fileMatch && method === 'GET') {
       const bytes = fileBytes.get(decodeURIComponent(fileMatch[1]!));
@@ -1828,5 +1850,168 @@ describe('P4 ViewerWorkspacePage Interactive Flows (QA-MASK-02/04/05)', () => {
     const radiusBeforeWheel = useViewerStore.getState().brushRadius;
     fireEvent.wheel(editCanvas, { deltaY: -100, altKey: true });
     expect(useViewerStore.getState().brushRadius).toBe(radiusBeforeWheel + 1);
+
+    // 5. Kéo ảnh (Pan) lên/xuống/trái/phải ở chế độ Xem lát, click ngắn đặt crosshair, và giữ Space khi đang chọn cọ vẽ
+    await user.click(screen.getByRole('button', { name: 'Xem lát' }));
+    const initialCrosshair = useViewerStore.getState().crosshairVoxel;
+    expect(useViewerStore.getState().panOffset).toEqual({ x: 0, y: 0 });
+
+    fireEvent.pointerDown(editCanvas, { button: 0, pointerId: 1, clientX: 100, clientY: 120 });
+    fireEvent.pointerMove(editCanvas, { button: 0, pointerId: 1, clientX: 125, clientY: 80 });
+    fireEvent.pointerUp(editCanvas, { button: 0, pointerId: 1, clientX: 125, clientY: 80 });
+    expect(useViewerStore.getState().panOffset).toEqual({ x: 25, y: -40 });
+    expect(useViewerStore.getState().crosshairVoxel).toEqual(initialCrosshair);
+
+    // Click ngắn (< 3px) trong chế độ Xem lát vẫn cập nhật crosshair
+    fireEvent.pointerDown(editCanvas, { button: 0, pointerId: 2, clientX: 40, clientY: 40 });
+    fireEvent.pointerUp(editCanvas, { button: 0, pointerId: 2, clientX: 40, clientY: 40 });
+    expect(useViewerStore.getState().panOffset).toEqual({ x: 25, y: -40 });
+    expect(useViewerStore.getState().crosshairVoxel).not.toEqual(initialCrosshair);
+
+    // Giữ Space trong chế độ Tô mask -> kéo ảnh mà không tô nét (isDirty vẫn false)
+    await user.click(screen.getByRole('button', { name: 'Tô mask' }));
+    expect(useViewerStore.getState().isDirty).toBe(false);
+    fireEvent.keyDown(window, { code: 'Space', key: ' ' });
+    fireEvent.pointerDown(editCanvas, { button: 0, pointerId: 3, clientX: 50, clientY: 60 });
+    fireEvent.pointerMove(editCanvas, { button: 0, pointerId: 3, clientX: 60, clientY: 90 });
+    fireEvent.pointerUp(editCanvas, { button: 0, pointerId: 3, clientX: 60, clientY: 90 });
+    fireEvent.keyUp(window, { code: 'Space', key: ' ' });
+    expect(useViewerStore.getState().panOffset).toEqual({ x: 35, y: -10 });
+    expect(useViewerStore.getState().isDirty).toBe(false);
+
+    // Nhấn nút 1:1 để đặt lại zoom & pan
+    await user.click(
+      screen.getByRole('button', {
+        name: 'Đặt lại góc nhìn MRI + Lớp phủ Mask (Axial)',
+      }),
+    );
+    expect(useViewerStore.getState().zoomLevel).toBe(1);
+    expect(useViewerStore.getState().panOffset).toEqual({ x: 0, y: 0 });
+
+    // 6. Nút "1 khung vẽ" & phím tắt I (thu gọn/mở bảng thông số) mở rộng tối đa tầm nhìn não
+    const onePaneBtn = screen.getByRole('button', { name: '1 khung vẽ' });
+    await user.click(onePaneBtn);
+    expect(onePaneBtn).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.queryByTestId('pane-original')).not.toBeInTheDocument();
+    await user.click(onePaneBtn);
+    expect(onePaneBtn).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getByTestId('pane-original')).toBeInTheDocument();
+
+    const inspectorBtn = screen.getByRole('button', {
+      name: 'Thu gọn bảng thông số',
+    });
+    expect(inspectorBtn).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.keyDown(window, { key: 'i' });
+    expect(
+      screen.getByRole('button', { name: 'Mở bảng thông số' }),
+    ).toHaveAttribute('aria-pressed', 'false');
+    fireEvent.keyDown(window, { key: 'i' });
+    expect(
+      screen.getByRole('button', { name: 'Thu gọn bảng thông số' }),
+    ).toHaveAttribute('aria-pressed', 'true');
+
+    // 7. Auto-fit phóng tỷ lệ canvas khi vùng chứa lớn hơn 240x240 (giữ nguyên tỷ lệ 1:1 của lát cắt)
+  });
+
+  it('scales SliceCanvasPane canvas up proportionally to fill a larger viewport (auto-fit)', async () => {
+    const callbacks: ResizeObserverCallback[] = [];
+    const OriginalRO = globalThis.ResizeObserver;
+    class MockResizeObserver {
+      constructor(cb: ResizeObserverCallback) {
+        callbacks.push(cb);
+      }
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+    vi.stubGlobal('ResizeObserver', MockResizeObserver);
+    try {
+      renderViewer();
+      await waitFor(() => {
+        expect(screen.getByTestId('mri-viewer-workspace')).toHaveAttribute(
+          'data-volume-status',
+          'ready',
+        );
+      });
+      const editCanvas = screen
+        .getByTestId('pane-axial-editable')
+        .querySelector('canvas')!;
+      const canvasFrame = editCanvas.parentElement!;
+      expect(canvasFrame.getAttribute('style')).toBeNull();
+
+      act(() => {
+        for (const cb of callbacks) {
+          cb(
+            [
+              {
+                contentRect: { width: 600, height: 500 } as DOMRectReadOnly,
+              } as ResizeObserverEntry,
+            ],
+            {} as ResizeObserver,
+          );
+        }
+      });
+
+      expect(canvasFrame).toHaveStyle({ width: '488px', height: '488px' });
+      expect(editCanvas.className).toContain('w-full');
+      expect(editCanvas.className).toContain('h-full');
+    } finally {
+      vi.stubGlobal('ResizeObserver', OriginalRO);
+    }
+  });
+
+  it('shows manual mask delete action in Viewer only for manual versions and falls back to remaining version after delete', async () => {
+    const user = userEvent.setup();
+    const geometry: VolumeGeometry = {
+      shape: [8, 8, 8],
+      spacingMm: [1, 1, 1],
+      affine: [
+        [1, 0, 0, 0],
+        [0, 1, 0, 0],
+        [0, 0, 1, 0],
+        [0, 0, 0, 1],
+      ],
+    };
+
+    useAuthStore.setState({
+      user: FIXTURE_USERS.doctor,
+      accessToken: 'live-token',
+      fixtureMode: false,
+      reauthRequired: false,
+    });
+
+    await mockLiveViewerApi({
+      caseId: 'case-viewer-del-1',
+      geometry,
+      versions: [
+        { id: 'ver-ai-1', version_number: 1, source: 'ai' },
+        { id: 'ver-manual-2', version_number: 2, source: 'manual' },
+      ],
+    });
+
+    renderViewer('case-viewer-del-1');
+
+    const selectEl = (await screen.findByLabelText(
+      'Chọn phiên bản mask',
+    )) as HTMLSelectElement;
+    await waitFor(() => {
+      expect(selectEl.value).toBe('ver-manual-2');
+    });
+
+    const deleteBtn = screen.getByRole('button', {
+      name: 'Xóa phiên bản mask thủ công',
+    });
+    expect(deleteBtn).toBeInTheDocument();
+
+    await user.click(deleteBtn);
+    await screen.findByRole('alertdialog');
+    await user.click(screen.getByRole('button', { name: 'Xóa phiên bản' }));
+
+    await waitFor(() => {
+      expect(selectEl.value).toBe('ver-ai-1');
+    });
+    expect(
+      screen.queryByRole('button', { name: 'Xóa phiên bản mask thủ công' }),
+    ).not.toBeInTheDocument();
   });
 });

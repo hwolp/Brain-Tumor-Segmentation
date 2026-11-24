@@ -13,10 +13,10 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
         ref={ref}
         aria-invalid={hasError || undefined}
         className={cn(
-          'box-border flex h-10 min-h-[40px] w-full min-w-0 max-w-full rounded-lg border bg-[var(--bg-surface)] px-3.5 py-2 text-sm text-[var(--text-primary)] placeholder:text-slate-400 transition-[border-color,box-shadow] duration-150 focus-visible:outline-none focus-visible:ring-3 disabled:cursor-not-allowed disabled:bg-[var(--bg-muted)] disabled:opacity-60',
+          'box-border flex h-10 min-h-[40px] w-full min-w-0 max-w-full rounded-[var(--radius-inner)] border bg-[var(--color-light)] px-3.5 py-2 text-sm text-[var(--color-ink)] placeholder:text-[var(--color-muted)] transition-[border-color,box-shadow] duration-150 ease-[var(--ease-out)] focus-visible:outline-none focus-visible:ring-3 disabled:cursor-not-allowed disabled:bg-[var(--color-paper-2)] disabled:opacity-60',
           hasError
             ? 'border-[var(--status-error)] focus:border-[var(--status-error)] focus-visible:border-[var(--status-error)] focus-visible:ring-[var(--status-error)]/15'
-            : 'border-[var(--border-default)] hover:border-slate-400 focus:border-[var(--action-primary)] focus-visible:border-[var(--action-primary)] focus-visible:ring-[var(--action-primary)]/15',
+            : 'border-[var(--color-rule)] hover:border-[var(--border-strong)] focus:border-[var(--color-focus)] focus-visible:border-[var(--color-focus)] focus-visible:ring-[var(--color-focus)]/18',
           className,
         )}
         {...props}
@@ -38,10 +38,10 @@ export const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
         ref={ref}
         aria-invalid={hasError || undefined}
         className={cn(
-          'box-border flex h-10 min-h-[40px] w-full min-w-0 max-w-full rounded-lg border bg-[var(--bg-surface)] py-2 pr-8 pl-3.5 text-sm text-[var(--text-primary)] transition-[border-color,box-shadow] duration-150 focus-visible:outline-none focus-visible:ring-3 disabled:cursor-not-allowed disabled:bg-[var(--bg-muted)] disabled:opacity-60',
+          'box-border flex h-10 min-h-[40px] w-full min-w-0 max-w-full rounded-[var(--radius-inner)] border bg-[var(--color-light)] py-2 pr-8 pl-3.5 text-sm text-[var(--color-ink)] transition-[border-color,box-shadow] duration-150 ease-[var(--ease-out)] focus-visible:outline-none focus-visible:ring-3 disabled:cursor-not-allowed disabled:bg-[var(--color-paper-2)] disabled:opacity-60',
           hasError
             ? 'border-[var(--status-error)] focus:border-[var(--status-error)] focus-visible:border-[var(--status-error)] focus-visible:ring-[var(--status-error)]/15'
-            : 'border-[var(--border-default)] hover:border-slate-400 focus:border-[var(--action-primary)] focus-visible:border-[var(--action-primary)] focus-visible:ring-[var(--action-primary)]/15',
+            : 'border-[var(--color-rule)] hover:border-[var(--border-strong)] focus:border-[var(--color-focus)] focus-visible:border-[var(--color-focus)] focus-visible:ring-[var(--color-focus)]/18',
           className,
         )}
         {...props}
@@ -65,10 +65,10 @@ export const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
         ref={ref}
         aria-invalid={hasError || undefined}
         className={cn(
-          'box-border flex min-h-[96px] w-full min-w-0 max-w-full rounded-lg border bg-[var(--bg-surface)] px-3.5 py-2 text-sm text-[var(--text-primary)] placeholder:text-slate-400 transition-[border-color,box-shadow] duration-150 focus-visible:outline-none focus-visible:ring-3 disabled:cursor-not-allowed disabled:bg-[var(--bg-muted)] disabled:opacity-60',
+          'box-border flex min-h-[96px] w-full min-w-0 max-w-full rounded-[var(--radius-inner)] border bg-[var(--color-light)] px-3.5 py-2 text-sm text-[var(--color-ink)] placeholder:text-[var(--color-muted)] transition-[border-color,box-shadow] duration-150 ease-[var(--ease-out)] focus-visible:outline-none focus-visible:ring-3 disabled:cursor-not-allowed disabled:bg-[var(--color-paper-2)] disabled:opacity-60',
           hasError
             ? 'border-[var(--status-error)] focus:border-[var(--status-error)] focus-visible:border-[var(--status-error)] focus-visible:ring-[var(--status-error)]/15'
-            : 'border-[var(--border-default)] hover:border-slate-400 focus:border-[var(--action-primary)] focus-visible:border-[var(--action-primary)] focus-visible:ring-[var(--action-primary)]/15',
+            : 'border-[var(--color-rule)] hover:border-[var(--border-strong)] focus:border-[var(--color-focus)] focus-visible:border-[var(--color-focus)] focus-visible:ring-[var(--color-focus)]/18',
           className,
         )}
         {...props}
@@ -113,7 +113,7 @@ export function FormField({
   return (
     <div
       data-invalid={error ? 'true' : undefined}
-      className={cn('flex min-w-0 flex-col gap-1.5', className)}
+      className={cn('flex min-w-0 flex-col gap-2', className)}
     >
       <label
         htmlFor={id}

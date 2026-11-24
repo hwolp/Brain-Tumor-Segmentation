@@ -33,8 +33,8 @@ from app.core.storage import LocalStorageAdapter
 from app.main import create_app
 from app.models.inference_job import InferenceJob, JobAttempt
 from app.models.user import User
-from app.services.file_cleanup_service import run_orphan_cleanup
-from app.services.job_service import reap_expired_attempts, sync_active_model
+from app.services.inference_job_service import reap_expired_attempts, sync_active_model
+from app.services.stored_file_service import run_orphan_cleanup
 from scripts.backup_restore import (
     run_backup,
     run_restore,

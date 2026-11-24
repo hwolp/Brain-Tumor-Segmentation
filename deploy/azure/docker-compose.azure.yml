@@ -1,0 +1,117 @@
+name: bts-azure
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-bts_prod}
+      POSTGRES_USER: ${POSTGRES_USER:-bts_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+    volumes:
+      - bts_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  api:
+    image: ${API_IMAGE:?API_IMAGE is required}:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    # Single worker preserves in-process lifespan tasks (_orphan_cleanup_loop and _job_reaper_loop).
+    command:
+      [
+        "uvicorn",
+        "app.main:app",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "8000",
+        "--proxy-headers",
+        "--forwarded-allow-ips=127.0.0.1,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16",
+      ]
+    environment:
+      APP_ENV: ${APP_ENV:-local}
+      SERVICE_NAME: ${SERVICE_NAME:-brain-tumor-api}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-bts_user}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/${POSTGRES_DB:-bts_prod}
+      DB_POOL_SIZE: ${DB_POOL_SIZE:-5}
+      DB_MAX_OVERFLOW: ${DB_MAX_OVERFLOW:-10}
+      STORAGE_ROOT: /app/storage
+      JWT_PRIVATE_KEY_PATH: /app/secrets/jwt-private.pem
+      JWT_PUBLIC_KEY_PATH: /app/secrets/jwt-public.pem
+      JWT_KEY_ID: ${JWT_KEY_ID:-azure-rs256-v1}
+      JWT_ISSUER: ${JWT_ISSUER:-brain-tumor-api}
+      JWT_AUDIENCE: ${JWT_AUDIENCE:-brain-tumor-web}
+      PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:?PUBLIC_ORIGIN is required}
+      ALLOWED_ORIGINS: '${ALLOWED_ORIGINS:-[]}'
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      MODEL_MANIFEST_PATH: /app/worker/manifest.json
+      MODEL_CHECKPOINT_PATH: ${MODEL_CHECKPOINT_PATH:-/models/best.pt}
+      WORKER_API_BASE_URL: ${WORKER_API_BASE_URL:-http://api:8000}
+      WORKER_TOKEN: ${WORKER_TOKEN:?WORKER_TOKEN is required}
+      WORKER_DEVICE: ${WORKER_DEVICE:-cpu}
+      # Migrations are executed explicitly by deploy.sh before switching api/web containers.
+      RUN_MIGRATIONS: "false"
+      AUTO_INIT_JWT_KEYS: ${AUTO_INIT_JWT_KEYS:-true}
+    volumes:
+      - bts_storage:/app/storage
+      - bts_secrets:/app/secrets
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health/ready', timeout=3)",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  web:
+    image: ${WEB_IMAGE:?WEB_IMAGE is required}:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      # Phase 2 (HTTPS with domain + Certbot): uncomment 443 and volumes below
+      # - "${HTTPS_PORT:-443}:443"
+    # volumes:
+    #   - ./nginx.https.conf:/etc/nginx/conf.d/default.conf:ro
+    #   - /etc/letsencrypt:/etc/letsencrypt:ro
+    #   - /var/www/certbot:/var/www/certbot:ro
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:80/healthz >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+volumes:
+  bts_pgdata:
+  bts_storage:
+  bts_secrets:

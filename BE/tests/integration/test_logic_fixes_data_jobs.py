@@ -29,7 +29,7 @@ from app.models.stored_file import StoredFile
 from app.models.system_setting import SystemSetting
 from app.models.user import User
 from app.models.volume import Volume
-from app.services.job_service import sync_active_model
+from app.services.inference_job_service import sync_active_model
 
 _PASSWORD = "LogicFixesPass!2026"
 _WORKER_TOKEN = "logic-fixes-worker-token"

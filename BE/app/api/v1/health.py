@@ -7,7 +7,7 @@ from fastapi import APIRouter
 from app.dependencies import DbEngineDep, SettingsDep, StorageDep
 from app.schemas.error import ErrorResponse
 from app.schemas.health import LivenessResponse, ReadinessResponse
-from app.services.health_service import get_liveness, get_readiness
+from app.services.system_monitoring_service import SystemMonitoringService
 
 router = APIRouter(
     prefix="/api/v1/health",
@@ -21,7 +21,7 @@ router = APIRouter(
 @router.get("/live")
 def liveness(settings: SettingsDep) -> LivenessResponse:
     """Verify the API process is alive without touching external dependencies."""
-    return get_liveness(settings)
+    return SystemMonitoringService.get_liveness(settings)
 
 
 @router.get(
@@ -35,4 +35,4 @@ def liveness(settings: SettingsDep) -> LivenessResponse:
 )
 def readiness(db_engine: DbEngineDep, storage: StorageDep) -> ReadinessResponse:
     """Verify PostgreSQL connectivity and private storage writability."""
-    return get_readiness(db_engine, storage)
+    return SystemMonitoringService.get_readiness(db_engine, storage)

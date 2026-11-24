@@ -689,7 +689,11 @@ export interface paths {
         get: operations["get_mask_version_api_v1_mask_versions__mask_version_id__get"];
         put?: never;
         post?: never;
-        delete?: never;
+        /**
+         * Delete Mask Version
+         * @description Soft-delete a doctor-owned manual mask version and reclaim storage.
+         */
+        delete: operations["delete_mask_version_api_v1_mask_versions__mask_version_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1297,7 +1301,7 @@ export interface components {
              * Resource Type
              * @enum {string}
              */
-            resource_type: "patient" | "case" | "volume";
+            resource_type: "patient" | "case" | "volume" | "mask_version";
             /**
              * Status
              * @enum {string}
@@ -4906,6 +4910,91 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MaskVersionOut"];
+                };
+            };
+            /** @description Unauthenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden or password change required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Resource not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Payload or quota too large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    delete_mask_version_api_v1_mask_versions__mask_version_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                mask_version_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeletionStatusOut"];
                 };
             };
             /** @description Unauthenticated */

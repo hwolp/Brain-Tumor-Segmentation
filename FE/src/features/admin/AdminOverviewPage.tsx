@@ -46,12 +46,12 @@ export function AdminOverviewPage() {
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-[var(--text-primary)]">
+          <h1 className="font-display text-[1.75rem] leading-[1.08] font-normal text-[var(--color-ink)]">
             Tổng quan vận hành hệ thống
           </h1>
           {data && (
-            <p className="mt-1 text-xs text-[var(--text-secondary)]">
-              Cập nhật lúc: <strong>{formatDateTimeVN(data.overview.updated_at)}</strong>
+            <p className="mt-1 text-xs text-[var(--text-secondary)] tabular-nums">
+              Cập nhật lúc: <strong className="font-medium">{formatDateTimeVN(data.overview.updated_at)}</strong>
             </p>
           )}
         </div>
@@ -95,28 +95,28 @@ export function AdminOverviewPage() {
             aria-label="Chỉ số hệ thống"
             className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4"
           >
-            <div className="flex h-full flex-col justify-between gap-2 rounded-xl border border-[var(--border-default)] bg-[var(--bg-surface)] p-4">
-              <div className="flex items-center justify-between text-xs font-medium text-[var(--text-secondary)]">
+            <div className="refract-panel refract-panel-lift flex h-full flex-col justify-between gap-2 p-5">
+              <div className="flex items-center justify-between text-xs font-medium text-[var(--color-muted)]">
                 <span>Tài khoản bác sĩ</span>
-                <Users className="size-4" aria-hidden="true" />
+                <Users className="size-4 text-[var(--color-muted)]" aria-hidden="true" />
               </div>
-              <p className="text-2xl font-bold tabular-nums">
-                {data.overview.active_doctors} hoạt động
+              <p className="refract-figure text-3xl text-[var(--color-ink)]">
+                {`${data.overview.active_doctors} hoạt động`}
               </p>
-              <p className="mt-auto text-xs text-[var(--text-secondary)]">
+              <p className="mt-auto text-xs text-[var(--color-ink-2)] tabular-nums">
                 Đang khóa: {data.overview.locked_doctors}
               </p>
             </div>
 
-            <div className="flex h-full flex-col justify-between gap-2 rounded-xl border border-[var(--border-default)] bg-[var(--bg-surface)] p-4">
-              <div className="flex items-center justify-between text-xs font-medium text-[var(--text-secondary)]">
+            <div className="refract-panel refract-panel-lift flex h-full flex-col justify-between gap-2 p-5">
+              <div className="flex items-center justify-between text-xs font-medium text-[var(--color-muted)]">
                 <span>Tác vụ AI</span>
-                <Cpu className="size-4" aria-hidden="true" />
+                <Cpu className="size-4 text-[var(--color-muted)]" aria-hidden="true" />
               </div>
-              <p className="text-2xl font-bold tabular-nums">
-                {data.overview.queued_jobs + data.overview.running_jobs} đang xử lý
+              <p className="refract-figure text-3xl text-[var(--color-ink)]">
+                {`${data.overview.queued_jobs + data.overview.running_jobs} đang xử lý`}
               </p>
-              <p className="mt-auto text-xs text-[var(--text-secondary)]">
+              <p className="mt-auto text-xs text-[var(--color-ink-2)] tabular-nums">
                 Chờ: {data.overview.queued_jobs} · Lỗi: {data.overview.failed_jobs}
               </p>
             </div>
@@ -137,29 +137,29 @@ export function AdminOverviewPage() {
                     )
                   : 0;
               return (
-                <div className="flex h-full flex-col justify-between gap-2 rounded-xl border border-[var(--border-default)] bg-[var(--bg-surface)] p-4">
-                  <div className="flex items-center justify-between text-xs font-medium text-[var(--text-secondary)]">
+                <div className="refract-panel refract-panel-lift flex h-full flex-col justify-between gap-2 p-5">
+                  <div className="flex items-center justify-between text-xs font-medium text-[var(--color-muted)]">
                     <span>Dung lượng cục bộ</span>
-                    <HardDrive className="size-4" aria-hidden="true" />
+                    <HardDrive className="size-4 text-[var(--color-muted)]" aria-hidden="true" />
                   </div>
-                  <p className="text-2xl font-bold tabular-nums">
+                  <p className="refract-figure text-3xl text-[var(--color-ink)]">
                     {formatGiB(data.overview.storage_used_bytes)}
                   </p>
-                  <div className="mt-auto flex flex-col gap-1.5">
+                  <div className="mt-auto flex flex-col gap-2">
                     <div
                       role="progressbar"
                       aria-label="Mức sử dụng dung lượng cục bộ"
                       aria-valuenow={storagePercent}
                       aria-valuemin={0}
                       aria-valuemax={100}
-                      className="h-1.5 w-full overflow-hidden rounded-full bg-[var(--bg-muted)]"
+                      className="h-2 w-full overflow-hidden rounded-[var(--radius-pill)] bg-[var(--color-paper-2)]"
                     >
                       <div
-                        className="h-full rounded-full bg-[var(--action-primary)] transition-all duration-300"
-                        style={{ width: `${storagePercent}%` }}
+                        className="h-full w-full origin-left rounded-[var(--radius-pill)] bg-[var(--color-accent)] transition-transform duration-300 ease-[var(--ease-out)]"
+                        style={{ transform: `scaleX(${storagePercent / 100})` }}
                       />
                     </div>
-                    <p className="text-xs text-[var(--text-secondary)]">
+                    <p className="text-xs text-[var(--color-ink-2)] tabular-nums">
                       Hạn mức: {formatGiB(data.overview.storage_quota_bytes)} ({storagePercent}%)
                     </p>
                   </div>
@@ -167,10 +167,10 @@ export function AdminOverviewPage() {
               );
             })()}
 
-            <div className="flex h-full flex-col justify-between gap-2 rounded-xl border border-[var(--border-default)] bg-[var(--bg-surface)] p-4">
-              <div className="flex items-center justify-between text-xs font-medium text-[var(--text-secondary)]">
+            <div className="refract-panel refract-panel-lift flex h-full flex-col justify-between gap-2 p-5">
+              <div className="flex items-center justify-between text-xs font-medium text-[var(--color-muted)]">
                 <span>Trạng thái Worker</span>
-                <Activity className="size-4" aria-hidden="true" />
+                <Activity className="size-4 text-[var(--color-muted)]" aria-hidden="true" />
               </div>
               <div className="pt-1">
                 <StatusBadge
@@ -182,32 +182,32 @@ export function AdminOverviewPage() {
                   tone={data.overview.worker_online ? 'success' : 'warning'}
                 />
               </div>
-              <p className="mt-auto text-xs text-[var(--text-secondary)]">
+              <p className="mt-auto text-xs text-[var(--color-ink-2)] tabular-nums">
                 Ngưỡng heartbeat: 90 giây
               </p>
             </div>
           </section>
 
           <section className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-            <div className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-surface)] p-5">
-              <div className="mb-3 flex items-center gap-2">
-                <Server className="size-5 text-[var(--action-primary)]" aria-hidden="true" />
-                <h2 className="text-base font-semibold">Danh sách Worker</h2>
+            <div className="refract-panel p-5 sm:p-6">
+              <div className="mb-4 flex items-center gap-2 border-b border-[var(--color-rule)] pb-3">
+                <Server className="size-4 text-[var(--color-muted)]" aria-hidden="true" />
+                <h2 className="font-display text-lg font-normal text-[var(--color-ink)]">Danh sách Worker</h2>
               </div>
               {data.workers.length === 0 ? (
-                <p className="text-sm text-[var(--text-secondary)]">
+                <p className="text-sm text-[var(--color-ink-2)]">
                   Chưa ghi nhận worker nào đăng ký heartbeat.
                 </p>
               ) : (
-                <ul className="flex flex-col gap-2 text-sm">
+                <ul className="divide-y divide-[var(--color-rule)] text-sm">
                   {data.workers.map((w) => (
                     <li
                       key={w.worker_id}
-                      className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[var(--border-default)] p-3"
+                      className="flex flex-wrap items-center justify-between gap-2 py-3 first:pt-0 last:pb-0"
                     >
                       <div>
-                        <p className="font-mono font-semibold">{w.worker_id}</p>
-                        <p className="text-xs text-[var(--text-secondary)]">
+                        <p className="font-mono font-medium text-[var(--color-ink)]">{w.worker_id}</p>
+                        <p className="text-xs text-[var(--color-ink-2)] tabular-nums">
                           Thiết bị: {w.device_type} · Model: {w.model_version} · Đang chạy: {w.active_jobs} · Heartbeat:{' '}
                           {formatDateTimeVN(w.last_heartbeat_at)}
                         </p>
@@ -222,26 +222,26 @@ export function AdminOverviewPage() {
               )}
             </div>
 
-            <div className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-surface)] p-5">
-              <div className="mb-3 flex items-center gap-2">
-                <Cpu className="size-5 text-[var(--action-primary)]" aria-hidden="true" />
-                <h2 className="text-base font-semibold">
+            <div className="refract-panel p-5 sm:p-6">
+              <div className="mb-4 flex items-center gap-2 border-b border-[var(--color-rule)] pb-3">
+                <Cpu className="size-4 text-[var(--color-muted)]" aria-hidden="true" />
+                <h2 className="font-display text-lg font-normal text-[var(--color-ink)]">
                   Mô hình AI
                 </h2>
               </div>
               {data.models.length === 0 ? (
-                <p className="text-sm text-[var(--text-secondary)]">
+                <p className="text-sm text-[var(--color-ink-2)]">
                   Chưa có model manifest nào được đăng ký.
                 </p>
               ) : (
-                <ul className="flex flex-col gap-2 text-sm">
+                <ul className="divide-y divide-[var(--color-rule)] text-sm">
                   {data.models.map((m) => (
                     <li
                       key={m.id}
-                      className="flex flex-col gap-1 rounded-lg border border-[var(--border-default)] p-3"
+                      className="flex flex-col gap-1 py-3 first:pt-0 last:pb-0"
                     >
                       <div className="flex items-center justify-between gap-2">
-                        <span className="font-semibold">
+                        <span className="font-medium">
                           {m.name} {/^\d/.test(m.version) ? `v${m.version}` : `· ${m.version}`}
                         </span>
                         <StatusBadge
@@ -249,7 +249,7 @@ export function AdminOverviewPage() {
                           tone={m.is_active ? 'success' : 'neutral'}
                         />
                       </div>
-                      <p className="font-mono text-xs text-[var(--text-secondary)]">
+                      <p className="font-mono text-xs text-[var(--text-secondary)] tabular-nums">
                         Input: {m.expected_shape.join('×')} · Spacing:{' '}
                         {m.expected_spacing_mm.join('×')} mm
                       </p>

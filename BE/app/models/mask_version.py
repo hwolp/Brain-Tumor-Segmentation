@@ -97,6 +97,7 @@ class MaskVersion(Base):
         nullable=True,
     )
     sha256: Mapped[str] = mapped_column(CHAR(64), nullable=False)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,

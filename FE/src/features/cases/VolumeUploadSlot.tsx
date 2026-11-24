@@ -97,10 +97,10 @@ export function VolumeUploadSlot({
   return (
     <div
       data-testid={`volume-slot-${modality}`}
-      className="flex flex-col gap-3 rounded-xl border border-[var(--border-default)] bg-[var(--bg-surface)] p-4 sm:p-5"
+      className="refract-panel flex flex-col gap-3 p-5 sm:p-6"
     >
       <div className="flex items-start justify-between gap-2">
-        <h2 className="text-base font-semibold text-[var(--text-primary)]">
+        <h2 className="font-display text-lg font-normal text-[var(--color-ink)]">
           {title}
         </h2>
         {volume ? (
@@ -138,7 +138,7 @@ export function VolumeUploadSlot({
             </div>
             <div className="min-w-0">
               <dt className="text-[var(--text-secondary)]">Hướng / Lưới</dt>
-              <dd className="font-mono font-medium">
+              <dd className="font-mono font-medium tabular-nums">
                 {volume.shape
                   ? `${volume.shape.join('×')} (${volume.orientation ?? 'N/A'})`
                   : 'Đang đọc'}
@@ -146,7 +146,7 @@ export function VolumeUploadSlot({
             </div>
             <div className="min-w-0">
               <dt className="text-[var(--text-secondary)]">Spacing (mm)</dt>
-              <dd className="font-mono font-medium">
+              <dd className="font-mono font-medium tabular-nums">
                 {volume.spacing_mm
                   ? volume.spacing_mm
                       .map((n) => Number(n.toFixed(4)))
@@ -156,7 +156,7 @@ export function VolumeUploadSlot({
             </div>
             <div className="min-w-0">
               <dt className="text-[var(--text-secondary)]">Dung lượng</dt>
-              <dd className="font-mono font-medium">
+              <dd className="font-mono font-medium tabular-nums">
                 {(volume.size_bytes / (1024 * 1024)).toFixed(2)} MiB
               </dd>
             </div>
@@ -262,7 +262,7 @@ export function VolumeUploadSlot({
                 <span className="truncate font-medium text-[var(--text-primary)]">
                   {uploadState.file.name}
                 </span>
-                <span className="shrink-0 font-mono font-semibold text-[var(--action-primary)]">
+                <span className="shrink-0 font-mono font-medium tabular-nums text-[var(--action-primary)]">
                   {uploadState.phase === 'validating'
                     ? 'Đang kiểm tra ảnh...'
                     : `${uploadState.progressPercent}%`}
@@ -278,25 +278,26 @@ export function VolumeUploadSlot({
                     ? 100
                     : uploadState.progressPercent
                 }
-                className="h-2.5 w-full overflow-hidden rounded-full bg-[var(--bg-surface)]"
+                className="h-2 w-full overflow-hidden rounded-md bg-[var(--bg-surface)]"
               >
                 <div
                   className={cn(
-                    'h-full rounded-full transition-all',
+                    'h-full w-full origin-left rounded-md transition-transform duration-200 ease-[var(--ease-out)]',
                     uploadState.phase === 'validating'
-                      ? 'w-full animate-pulse bg-[var(--status-info)]'
+                      ? 'bg-[var(--status-info)]'
                       : 'bg-[var(--action-primary)]',
                   )}
                   style={{
-                    width:
+                    transform: `scaleX(${
                       uploadState.phase === 'validating'
-                        ? '100%'
-                        : `${uploadState.progressPercent}%`,
+                        ? 1
+                        : Math.min(1, Math.max(0, uploadState.progressPercent / 100))
+                    })`,
                   }}
                 />
               </div>
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <span className="text-xs text-[var(--text-secondary)]">
+                <span className="text-xs text-[var(--text-secondary)] tabular-nums">
                   {uploadState.phase === 'validating'
                     ? 'Đang kiểm tra ảnh NIfTI trên máy chủ...'
                     : `${(uploadState.loadedBytes / (1024 * 1024)).toFixed(2)} / ${(uploadState.totalBytes / (1024 * 1024)).toFixed(2)} MiB`}
@@ -326,15 +327,15 @@ export function VolumeUploadSlot({
                 onDragLeave={() => setIsDragOver(false)}
                 onDrop={handleDrop}
                 className={cn(
-                  'flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed p-4 text-center transition-colors',
+                  'flex flex-col items-center justify-center gap-2 rounded-[var(--radius-inner)] border border-dashed p-4 text-center transition-colors',
                   isDragOver
-                    ? 'border-[var(--action-primary)] bg-[var(--bg-muted)]'
-                    : 'border-[var(--border-default)] bg-[var(--bg-surface)]',
+                    ? 'border-[var(--color-focus)] bg-[var(--color-accent-soft)]'
+                    : 'border-[var(--color-rule)] bg-[var(--color-paper)]/60',
                   isInputsLocked && 'opacity-60',
                 )}
               >
                 <FileUp
-                  className="size-6 text-[var(--text-secondary)]"
+                  className="size-5 text-[var(--text-muted)]"
                   aria-hidden="true"
                 />
                 <p className="text-xs text-[var(--text-secondary)]">

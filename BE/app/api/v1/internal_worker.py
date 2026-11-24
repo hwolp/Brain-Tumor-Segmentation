@@ -23,7 +23,7 @@ from app.schemas.jobs import (
     WorkerHeartbeatRequest,
     WorkerJobHeartbeatRequest,
 )
-from app.services.job_service import JobService
+from app.services.inference_job_service import InferenceJobService
 
 
 def require_worker_token(
@@ -56,7 +56,7 @@ def heartbeat_worker(
     storage: StorageDep,
     settings: SettingsDep,
 ) -> None:
-    JobService(db, storage, settings).heartbeat_worker(
+    InferenceJobService(db, storage, settings).heartbeat_worker(
         worker_id=payload.worker_id,
         device_type=payload.device_type,
         model_version_id=payload.model_version_id,
@@ -74,7 +74,7 @@ def claim_job(
     storage: StorageDep,
     settings: SettingsDep,
 ) -> WorkerClaimOut | Response:
-    claimed = JobService(db, storage, settings).claim_job(
+    claimed = InferenceJobService(db, storage, settings).claim_job(
         worker_id=payload.worker_id,
         device_type=payload.device_type,
         model_version_id=payload.model_version_id,
@@ -95,7 +95,7 @@ def download_input_file(
     worker_id: Annotated[str, Header(alias="X-Worker-ID")],
     lease_token: Annotated[str, Header(alias="X-Lease-Token")],
 ) -> StreamingResponse:
-    stored_file = JobService(db, storage, settings).authorize_input_file(
+    stored_file = InferenceJobService(db, storage, settings).authorize_input_file(
         file_id=file_id,
         job_id=job_id,
         attempt_id=attempt_id,
@@ -137,7 +137,7 @@ def heartbeat_job(
     storage: StorageDep,
     settings: SettingsDep,
 ) -> InferenceJobOut:
-    return JobService(db, storage, settings).heartbeat_job(
+    return InferenceJobService(db, storage, settings).heartbeat_job(
         job_id=job_id,
         worker_id=payload.worker_id,
         attempt_id=payload.attempt_id,
@@ -162,7 +162,7 @@ async def complete_job(
     coverage: Annotated[UploadFile, File()],
     metadata: Annotated[UploadFile, File()],
 ) -> WorkerCompleteResponse:
-    job = await JobService(db, storage, settings).complete_job(
+    job = await InferenceJobService(db, storage, settings).complete_job(
         job_id=job_id,
         worker_id=worker_id,
         attempt_id=attempt_id,
@@ -185,7 +185,7 @@ def fail_job(
     settings: SettingsDep,
     request_id: RequestIdDep,
 ) -> WorkerActionResponse:
-    job = JobService(db, storage, settings).fail_job(
+    job = InferenceJobService(db, storage, settings).fail_job(
         job_id=job_id,
         worker_id=payload.worker_id,
         attempt_id=payload.attempt_id,

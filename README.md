@@ -9,15 +9,17 @@ Hệ thống trạm làm việc phân đoạn u não trên ảnh MRI đa xung (*
 ## Cấu trúc thư mục chính
 
 - `BE/` — Backend FastAPI:
-  - `app/` — Mã nguồn ứng dụng (`api/`, `core/`, `models/`, `repositories/`, `schemas/`, `services/`, `dependencies.py`, `main.py`).
+  - `app/` — Mã nguồn ứng dụng (`api/`, `core/`, `models/`, `repositories/`, `schemas/`, `services/`, `validators/`, `dependencies.py`, `main.py`).
   - `scripts/` — CLI vận hành & kiểm thử (`export_openapi.py`, `bootstrap_admin.py`, `backup_restore.py`, `run_p7_real_ai_smoke.py`, `run_p7_e2e_stack.py`).
   - `migrations/` — Alembic migrations (`0001_p1_foundation`, `0002_p2_auth_and_accounts`, `0003_p3_patients_cases_volumes`, `0004_p4_mask_versions`, `0005_p5_inference_jobs`, `0006_p6_admin_settings`).
   - `openapi/openapi.json` — Hợp đồng OpenAPI deterministic do FastAPI xuất.
   - `worker/` — AI inference adapter, verified manifest (`P0`) & single-process worker service (`P5`).
   - `tests/{unit,integration,contract,ai}` — Bộ kiểm thử Python (**`121` tests** tổng cộng: **`108` BE** (`35` unit + `66` integration + `7` contract) + **`13` AI**).
-- `FE/` — Frontend React + Vite + TypeScript (`src/app`, `src/features`, `src/shared`, `src/viewer-adapter`, `src/test`).
+- `FE/` — Frontend React + Vite + TypeScript (`src/app`, `src/features`, `src/shared`, `src/viewer-adapter`, `src/test`), `Dockerfile` (dev) và `Dockerfile.prod` + `nginx.conf` (production).
+- `deploy/azure/` — Cấu hình Docker Compose, script rollout `deploy.sh`, mẫu biến môi trường `azure.env.example`, mẫu HTTPS Nginx và tài liệu triển khai lên Azure VM.
+- `.github/workflows/` — GitHub Actions CI (`ci.yml`) và CD tự động build/push GHCR + deploy lên Azure VM (`deploy-azure.yml`).
 - `docker-compose.yml` — Stack Docker Compose gồm 3 dịch vụ (`postgres`, `api`, `frontend`) chạy trong 1 stack `braintumorsegmentation` trên Docker Desktop.
-- `start-dev.bat` — Script khởi chạy dev cục bộ trên Windows (PostgreSQL Docker + BE/FE/Worker trên host).
+- `start-dev.bat` — Script khởi chạy nhanh trên Windows toàn bộ Docker Compose stack (`postgres`, `api`, `frontend`) kèm AI Worker tùy chọn trên host (hỗ trợ `--build`, `--no-worker`).
 
 ---
 
@@ -338,6 +340,14 @@ Push-Location BE
 .\.venv\Scripts\python.exe -m scripts.bootstrap_admin --username adminops --reset
 Pop-Location
 ```
+
+### 9. Triển khai AI Worker tách riêng trên Cloud / Colab / Máy GPU
+
+AI Worker giao tiếp hoàn toàn qua HTTPS (`/api/v1/internal/*`) nên có thể chạy độc lập ở máy GPU/Cloud bằng [`BE/Dockerfile.worker`](BE/Dockerfile.worker), [`docker-compose.worker.yml`](docker-compose.worker.yml) và [`BE/worker.env.example`](BE/worker.env.example). Xem chi tiết tại [`docs/worker-cloud-deploy.md`](docs/worker-cloud-deploy.md).
+
+### 10. Triển khai tự động lên Azure VM bằng GitHub CI/CD
+
+Hệ thống đã tích hợp GitHub Actions CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) và CD tự động build/push Docker image lên GHCR rồi deploy qua SSH lên Azure Linux VM ([`.github/workflows/deploy-azure.yml`](.github/workflows/deploy-azure.yml)). Xem hướng dẫn cấu hình Azure VM, GitHub Secrets, bootstrap admin và nâng cấp HTTPS tại [`deploy/azure/README.md`](deploy/azure/README.md).
 
 ---
 

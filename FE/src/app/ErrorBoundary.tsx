@@ -31,18 +31,18 @@ export class ErrorBoundary extends React.Component<
   render() {
     if (this.state.hasError) {
       return (
-        <main className="flex min-h-dvh items-center justify-center bg-[var(--bg-canvas)] p-6">
+        <main className="flex min-h-dvh items-center justify-center bg-[var(--color-paper)] p-6">
           <section
             role="alert"
-            className="flex w-full max-w-md flex-col gap-4 rounded-xl border border-[var(--status-error-border)] bg-[var(--bg-surface)] p-6 shadow-sm"
+            className="refract-panel-lead flex w-full max-w-md flex-col gap-4 border-[var(--status-error-border)] p-6 sm:p-7"
           >
             <div className="flex items-start gap-3">
               <AlertTriangle
-                className="size-6 shrink-0 text-[var(--status-error)]"
+                className="mt-0.5 size-5 shrink-0 text-[var(--status-error)]"
                 aria-hidden="true"
               />
               <div className="flex flex-col items-start gap-1">
-                <h1 className="text-lg font-semibold leading-6 text-[var(--text-primary)]">
+                <h1 className="font-display text-xl font-normal leading-6 text-[var(--color-ink)]">
                   Giao diện gặp sự cố ngoài dự kiến
                 </h1>
                 <p className="text-sm text-[var(--text-secondary)]">

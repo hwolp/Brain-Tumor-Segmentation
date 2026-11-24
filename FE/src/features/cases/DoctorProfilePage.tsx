@@ -37,27 +37,27 @@ export function DoctorProfilePage() {
 
   return (
     <div className="flex max-w-2xl flex-col gap-5">
-      <h1 className="text-2xl font-bold text-[var(--text-primary)]">
+      <h1 className="font-display text-[1.75rem] leading-[1.08] font-normal text-[var(--color-ink)]">
         Tài khoản cá nhân
       </h1>
 
-      <section className="flex flex-col gap-4 rounded-xl border border-[var(--border-default)] bg-[var(--bg-surface)] p-6">
+      <section className="refract-panel flex flex-col gap-4 p-6">
         <div className="flex items-center gap-3">
-          <div className="flex size-12 shrink-0 items-center justify-center rounded-full bg-[var(--status-info-bg)] text-[var(--action-primary)]">
-            <UserCircle className="size-7" aria-hidden="true" />
+          <div className="flex size-11 shrink-0 items-center justify-center rounded-[var(--radius-pill)] border border-[var(--color-rule)] bg-[var(--color-paper-2)] text-[var(--color-accent)]">
+            <UserCircle className="size-6" aria-hidden="true" />
           </div>
           <div className="min-w-0">
-            <h2 className="truncate text-lg font-semibold text-[var(--text-primary)]">
+            <h2 className="font-display truncate text-lg font-normal text-[var(--color-ink)]">
               {profile?.display_name ?? 'Bác sĩ'}
             </h2>
-            <p className="truncate text-sm text-[var(--text-secondary)]">
+            <p className="truncate text-sm text-[var(--color-ink-2)]">
               Tên đăng nhập:{' '}
               <span className="font-mono">@{profile?.username ?? '—'}</span>
             </p>
           </div>
         </div>
 
-        <dl className="grid grid-cols-1 gap-3 border-t border-[var(--border-default)] pt-4 text-sm sm:grid-cols-2">
+        <dl className="grid grid-cols-1 gap-3 border-t border-[var(--color-rule)] pt-4 text-sm sm:grid-cols-2">
           <div>
             <dt className="text-xs text-[var(--text-secondary)]">Vai trò</dt>
             <dd className="mt-1">

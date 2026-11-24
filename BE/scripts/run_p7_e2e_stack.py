@@ -45,7 +45,7 @@ from app.models.patient import Patient  # noqa: E402
 from app.models.stored_file import StoredFile  # noqa: E402
 from app.models.user import User  # noqa: E402
 from app.models.volume import Volume  # noqa: E402
-from app.services.job_service import sync_active_model  # noqa: E402
+from app.services.inference_job_service import sync_active_model  # noqa: E402
 
 logger = logging.getLogger("bts.p7_e2e_stack")
 

@@ -33,7 +33,7 @@ from app.models.patient import Patient
 from app.models.stored_file import StoredFile
 from app.models.user import User
 from app.models.volume import Volume
-from app.services.job_service import reap_expired_attempts
+from app.services.inference_job_service import reap_expired_attempts
 
 _HASHER = PasswordHasher()
 _PASSWORD = "P5P6Integration123!"

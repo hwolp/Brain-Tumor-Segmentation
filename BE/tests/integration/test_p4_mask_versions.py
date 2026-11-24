@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import gzip
+import hashlib
 import io
+import json
 import uuid
 from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
@@ -21,6 +23,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.config import Settings
 from app.core.security import hash_password
+from app.core.storage import LocalStorageAdapter
 from app.main import create_app
 from app.models.audit_event import AuditEvent
 from app.models.case import Case
@@ -644,3 +647,330 @@ def test_p4_idempotency_replay_after_concurrent_case_soft_delete_returns_404(
     assert case_deleted_during_upload is True
     assert replay_response.status_code == 404, replay_response.text
     assert replay_response.json()["error"]["code"] == "case_not_found"
+
+
+def _seed_ai_mask_version(
+    db: Session,
+    *,
+    settings: Settings,
+    doctor_id: uuid.UUID,
+    case_id: uuid.UUID,
+    reference_volume_id: uuid.UUID,
+    version_number: int = 1,
+) -> tuple[MaskVersion, StoredFile, StoredFile]:
+    storage = LocalStorageAdapter(settings.effective_storage_root)
+    mask_bytes = _make_nifti_gz_bytes(np.zeros((4, 4, 4), dtype=np.uint8))
+    mask_sha = hashlib.sha256(mask_bytes).hexdigest()
+    mask_staged = storage.put_temp(io.BytesIO(mask_bytes))
+    mask_committed = storage.commit(mask_staged.staging_key)
+
+    cov_bytes = json.dumps({"original_shape": [4, 4, 4], "pipeline_version": "p0"}).encode("utf-8")
+    cov_sha = hashlib.sha256(cov_bytes).hexdigest()
+    cov_staged = storage.put_temp(io.BytesIO(cov_bytes))
+    cov_committed = storage.commit(cov_staged.staging_key)
+
+    mask_sf = StoredFile(
+        storage_key=uuid.UUID(mask_committed.storage_key),
+        original_name=f"mask-case-{case_id}-v{version_number}.nii.gz",
+        size_bytes=len(mask_bytes),
+        sha256=mask_sha,
+        media_type="application/gzip",
+        state="committed",
+        owner_id=doctor_id,
+    )
+    cov_sf = StoredFile(
+        storage_key=uuid.UUID(cov_committed.storage_key),
+        original_name=f"coverage-case-{case_id}-v{version_number}.json",
+        size_bytes=len(cov_bytes),
+        sha256=cov_sha,
+        media_type="application/json",
+        state="committed",
+        owner_id=doctor_id,
+    )
+    db.add_all([mask_sf, cov_sf])
+    db.flush()
+
+    mv = MaskVersion(
+        case_id=case_id,
+        version_number=version_number,
+        source="ai",
+        base_version_id=None,
+        reference_volume_id=reference_volume_id,
+        file_id=mask_sf.id,
+        created_by=None,
+        job_id=None,
+        model_version_id="tda-seg-unet:test",
+        coverage_file_id=cov_sf.id,
+        note="AI baseline",
+        label_voxel_counts={"1": 0, "2": 0, "4": 0},
+        label_volumes_mm3={"1": 0.0, "2": 0.0, "4": 0.0},
+        composite_volumes_mm3={"WT": 0.0, "TC": 0.0, "ET": 0.0},
+        sha256=mask_sha,
+    )
+    db.add(mv)
+    db.flush()
+
+    case_row = db.get(Case, case_id)
+    assert case_row is not None
+    case_row.latest_mask_version_id = mv.id
+    case_row.inputs_locked_at = datetime.now(ZoneInfo("UTC"))
+    db.commit()
+    db.refresh(mv)
+    db.refresh(mask_sf)
+    db.refresh(cov_sf)
+    return mv, mask_sf, cov_sf
+
+
+def test_delete_manual_mask_version_reclaims_storage_and_rolls_back_head(
+    p4_client: TestClient,
+    p4_db_session: Session,
+    test_settings: Settings,
+) -> None:
+    doctor = _seed_user(p4_db_session, username="doc_p4_del_ok", display_name="Dr. Delete")
+    token = _login(p4_client, "doc_p4_del_ok")
+    case_id = _create_patient_and_case(p4_client, token, code="PAT-P4-DEL-01")
+    volume = _upload_volume(p4_client, token, case_id, "t1ce", shape=(4, 4, 4))
+
+    ai_v1, _, ai_cov_sf = _seed_ai_mask_version(
+        p4_db_session,
+        settings=test_settings,
+        doctor_id=doctor.id,
+        case_id=uuid.UUID(case_id),
+        reference_volume_id=uuid.UUID(volume["id"]),
+        version_number=1,
+    )
+
+    mask_data = np.zeros((4, 4, 4), dtype=np.uint8)
+    mask_data[1, 1, 1] = 1
+    mask_bytes = _make_nifti_gz_bytes(mask_data)
+
+    r_v2 = p4_client.post(
+        f"/api/v1/cases/{case_id}/mask-versions",
+        headers={**_auth_header(token), "Idempotency-Key": str(uuid.uuid4())},
+        data={
+            "base_version_id": str(ai_v1.id),
+            "reference_volume_id": volume["id"],
+            "note": "Manual edit v2",
+        },
+        files={"mask": ("mask.nii.gz", mask_bytes, "application/gzip")},
+    )
+    assert r_v2.status_code == 201, r_v2.text
+    v2 = r_v2.json()
+    assert v2["version_number"] == 2
+
+    idem_v3 = str(uuid.uuid4())
+    r_v3 = p4_client.post(
+        f"/api/v1/cases/{case_id}/mask-versions",
+        headers={**_auth_header(token), "Idempotency-Key": idem_v3},
+        data={
+            "base_version_id": v2["id"],
+            "reference_volume_id": volume["id"],
+            "note": "Manual edit v3 to delete",
+        },
+        files={"mask": ("mask.nii.gz", mask_bytes, "application/gzip")},
+    )
+    assert r_v3.status_code == 201, r_v3.text
+    v3 = r_v3.json()
+    assert v3["version_number"] == 3
+
+    r_del_v3 = p4_client.delete(
+        f"/api/v1/mask-versions/{v3['id']}",
+        headers=_auth_header(token),
+    )
+    assert r_del_v3.status_code == 202, r_del_v3.text
+    del_payload = r_del_v3.json()
+    assert del_payload["resource_type"] == "mask_version"
+    assert del_payload["resource_id"] == v3["id"]
+    assert del_payload["status"] == "deleted"
+    assert del_payload["files_cleaned"] == 1
+
+    # Hidden from list, get, export, metadata, and file content endpoints
+    r_list = p4_client.get(
+        f"/api/v1/cases/{case_id}/mask-versions",
+        headers=_auth_header(token),
+    )
+    assert r_list.status_code == 200
+    assert [item["id"] for item in r_list.json()["items"]] == [v2["id"], str(ai_v1.id)]
+
+    for endpoint in (
+        f"/api/v1/mask-versions/{v3['id']}",
+        f"/api/v1/mask-versions/{v3['id']}/export",
+        f"/api/v1/mask-versions/{v3['id']}/metadata",
+        f"/api/v1/files/{v3['file_id']}/content",
+    ):
+        assert p4_client.get(endpoint, headers=_auth_header(token)).status_code == 404
+
+    # DB state, storage reclamation, head rollback, and audit event
+    p4_db_session.expire_all()
+    v3_row = p4_db_session.get(MaskVersion, uuid.UUID(v3["id"]))
+    assert v3_row is not None
+    assert v3_row.deleted_at is not None
+    assert v3_row.note is None
+    v3_file = p4_db_session.get(StoredFile, uuid.UUID(v3["file_id"]))
+    assert v3_file is not None
+    assert v3_file.state == "deleted"
+    storage = LocalStorageAdapter(test_settings.effective_storage_root)
+    assert not (storage.objects_root / str(v3_file.storage_key)).exists()
+
+    case_row = p4_db_session.get(Case, uuid.UUID(case_id))
+    assert case_row is not None
+    assert str(case_row.latest_mask_version_id) == v2["id"]
+
+    audit = p4_db_session.query(AuditEvent).filter_by(
+        action="mask_version_deleted",
+        resource_id=v3["id"],
+    ).one_or_none()
+    assert audit is not None
+
+    # Using deleted v3 as base fails with 404; saving from v2 advances monotonically to v4
+    r_stale_base = p4_client.post(
+        f"/api/v1/cases/{case_id}/mask-versions",
+        headers={**_auth_header(token), "Idempotency-Key": str(uuid.uuid4())},
+        data={"base_version_id": v3["id"], "reference_volume_id": volume["id"]},
+        files={"mask": ("mask.nii.gz", mask_bytes, "application/gzip")},
+    )
+    assert r_stale_base.status_code == 404
+
+    r_v4 = p4_client.post(
+        f"/api/v1/cases/{case_id}/mask-versions",
+        headers={**_auth_header(token), "Idempotency-Key": str(uuid.uuid4())},
+        data={"base_version_id": v2["id"], "reference_volume_id": volume["id"]},
+        files={"mask": ("mask.nii.gz", mask_bytes, "application/gzip")},
+    )
+    assert r_v4.status_code == 201, r_v4.text
+    v4 = r_v4.json()
+    assert v4["version_number"] == 4
+
+    # Replaying deleted v3's original Idempotency-Key returns 409 idempotency_conflict
+    r_replay_deleted = p4_client.post(
+        f"/api/v1/cases/{case_id}/mask-versions",
+        headers={**_auth_header(token), "Idempotency-Key": idem_v3},
+        data={
+            "base_version_id": v2["id"],
+            "reference_volume_id": volume["id"],
+            "note": "Manual edit v3 to delete",
+        },
+        files={"mask": ("mask.nii.gz", mask_bytes, "application/gzip")},
+    )
+    assert r_replay_deleted.status_code == 409
+    assert r_replay_deleted.json()["error"]["code"] == "idempotency_conflict"
+
+    # Delete v4 and v2 -> head rolls back to ai_v1 AND shared coverage_file_id remains intact
+    assert p4_client.delete(
+        f"/api/v1/mask-versions/{v4['id']}", headers=_auth_header(token)
+    ).status_code == 202
+    assert p4_client.delete(
+        f"/api/v1/mask-versions/{v2['id']}", headers=_auth_header(token)
+    ).status_code == 202
+
+    p4_db_session.expire_all()
+    case_after = p4_db_session.get(Case, uuid.UUID(case_id))
+    assert case_after is not None
+    assert case_after.latest_mask_version_id == ai_v1.id
+    cov_after = p4_db_session.get(StoredFile, ai_cov_sf.id)
+    assert cov_after is not None
+    assert cov_after.state == "committed"
+    assert (storage.objects_root / str(cov_after.storage_key)).is_file()
+
+
+def test_delete_ai_mask_version_rejected_with_409_and_rbac_owner_boundaries(
+    p4_client: TestClient,
+    p4_db_session: Session,
+    test_settings: Settings,
+) -> None:
+    doc_a = _seed_user(p4_db_session, username="doc_p4_del_a")
+    _seed_user(p4_db_session, username="doc_p4_del_b")
+    _seed_user(p4_db_session, username="admin_p4_del", role="admin")
+
+    tok_a = _login(p4_client, "doc_p4_del_a")
+    tok_b = _login(p4_client, "doc_p4_del_b")
+    tok_admin = _login(p4_client, "admin_p4_del")
+
+    case_id = _create_patient_and_case(p4_client, tok_a, code="PAT-P4-DEL-02")
+    volume = _upload_volume(p4_client, tok_a, case_id, "t1ce", shape=(4, 4, 4))
+
+    ai_v1, _, _ = _seed_ai_mask_version(
+        p4_db_session,
+        settings=test_settings,
+        doctor_id=doc_a.id,
+        case_id=uuid.UUID(case_id),
+        reference_volume_id=uuid.UUID(volume["id"]),
+        version_number=1,
+    )
+
+    mask_bytes = _make_nifti_gz_bytes(np.zeros((4, 4, 4), dtype=np.uint8))
+    r_v2 = p4_client.post(
+        f"/api/v1/cases/{case_id}/mask-versions",
+        headers={**_auth_header(tok_a), "Idempotency-Key": str(uuid.uuid4())},
+        data={"base_version_id": str(ai_v1.id), "reference_volume_id": volume["id"]},
+        files={"mask": ("mask.nii.gz", mask_bytes, "application/gzip")},
+    )
+    assert r_v2.status_code == 201, r_v2.text
+    manual_v2_id = r_v2.json()["id"]
+
+    # AI mask cannot be deleted -> 409 ai_mask_not_deletable
+    r_del_ai = p4_client.delete(
+        f"/api/v1/mask-versions/{ai_v1.id}",
+        headers=_auth_header(tok_a),
+    )
+    assert r_del_ai.status_code == 409, r_del_ai.text
+    assert r_del_ai.json()["error"]["code"] == "ai_mask_not_deletable"
+    assert p4_client.get(
+        f"/api/v1/mask-versions/{ai_v1.id}/export", headers=_auth_header(tok_a)
+    ).status_code == 200
+
+    # Doctor B cannot delete Doctor A's manual mask -> 404
+    r_del_other = p4_client.delete(
+        f"/api/v1/mask-versions/{manual_v2_id}",
+        headers=_auth_header(tok_b),
+    )
+    assert r_del_other.status_code == 404
+
+    # Admin cannot call doctor mask endpoint -> 403
+    r_del_admin = p4_client.delete(
+        f"/api/v1/mask-versions/{manual_v2_id}",
+        headers=_auth_header(tok_admin),
+    )
+    assert r_del_admin.status_code == 403
+
+    # Manual v2 remains intact
+    assert p4_client.get(
+        f"/api/v1/mask-versions/{manual_v2_id}", headers=_auth_header(tok_a)
+    ).status_code == 200
+
+
+def test_backup_restore_verify_ignores_soft_deleted_manual_mask_version(
+    p4_client: TestClient,
+    p4_db_session: Session,
+    migrated_postgres: str,
+    test_settings: Settings,
+) -> None:
+    from scripts.backup_restore import verify_storage_and_db_integrity
+
+    _seed_user(p4_db_session, username="doc_p4_del_verify")
+    token = _login(p4_client, "doc_p4_del_verify")
+    case_id = _create_patient_and_case(p4_client, token, code="PAT-P4-DEL-VERIFY")
+    volume = _upload_volume(p4_client, token, case_id, "flair", shape=(4, 4, 4))
+
+    mask_bytes = _make_nifti_gz_bytes(np.zeros((4, 4, 4), dtype=np.uint8))
+    r_v1 = p4_client.post(
+        f"/api/v1/cases/{case_id}/mask-versions",
+        headers={**_auth_header(token), "Idempotency-Key": str(uuid.uuid4())},
+        data={"reference_volume_id": volume["id"], "note": "To be deleted"},
+        files={"mask": ("mask.nii.gz", mask_bytes, "application/gzip")},
+    )
+    assert r_v1.status_code == 201, r_v1.text
+    v1_id = r_v1.json()["id"]
+
+    r_del = p4_client.delete(
+        f"/api/v1/mask-versions/{v1_id}",
+        headers=_auth_header(token),
+    )
+    assert r_del.status_code == 202, r_del.text
+
+    verify_summary = verify_storage_and_db_integrity(
+        database_url=migrated_postgres,
+        storage_root=test_settings.effective_storage_root,
+    )
+    assert verify_summary["status"] == "ok"
+    assert verify_summary["verified_mask_versions"] == 0

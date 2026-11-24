@@ -1080,7 +1080,8 @@
             "enum": [
               "patient",
               "case",
-              "volume"
+              "volume",
+              "mask_version"
             ],
             "title": "Resource Type",
             "type": "string"
@@ -6921,6 +6922,113 @@
       }
     },
     "/api/v1/mask-versions/{mask_version_id}": {
+      "delete": {
+        "description": "Soft-delete a doctor-owned manual mask version and reclaim storage.",
+        "operationId": "delete_mask_version_api_v1_mask_versions__mask_version_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "mask_version_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Mask Version Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeletionStatusOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden or password change required"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Resource not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Payload or quota too large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal server error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Mask Version",
+        "tags": [
+          "mask-versions"
+        ]
+      },
       "get": {
         "description": "Get metadata and physical volume statistics for a doctor-owned mask version.",
         "operationId": "get_mask_version_api_v1_mask_versions__mask_version_id__get",

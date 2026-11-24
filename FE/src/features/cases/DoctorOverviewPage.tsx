@@ -3,10 +3,7 @@ import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
   ArrowRight,
-  CheckCircle2,
-  Clock,
   Eye,
-  FileStack,
   Search,
   X,
 } from 'lucide-react';
@@ -165,7 +162,7 @@ export function DoctorOverviewPage() {
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-bold text-[var(--text-primary)]">
+        <h1 className="font-display text-[1.75rem] leading-[1.08] font-normal text-[var(--color-ink)]">
           Tổng quan ca chụp của tôi
         </h1>
 
@@ -185,63 +182,48 @@ export function DoctorOverviewPage() {
         aria-label="Chỉ số tổng quan"
         className="grid grid-cols-1 gap-4 md:grid-cols-3"
       >
-        <div className="flex items-center gap-3 rounded-xl border border-[var(--border-default)] bg-[var(--bg-surface)] p-4">
-          <div className="flex size-11 shrink-0 items-center justify-center rounded-lg bg-[var(--status-info-bg)] text-[var(--status-info)]">
-            <FileStack className="size-5" aria-hidden="true" />
-          </div>
-          <div className="min-w-0">
-            <p className="text-xs font-medium text-[var(--text-secondary)]">
-              Tổng số ca gần đây
-            </p>
-            <p className="text-2xl font-bold tabular-nums">
-              {isStatsUnavailable ? '—' : items.length}
-            </p>
-          </div>
+        <div className="refract-panel refract-panel-lift flex flex-col gap-1.5 p-5">
+          <p className="text-xs font-medium text-[var(--color-muted)]">
+            Tổng số ca gần đây
+          </p>
+          <p className="refract-figure text-4xl text-[var(--color-ink)]">
+            {isStatsUnavailable ? '—' : items.length}
+          </p>
         </div>
 
-        <div className="flex items-center gap-3 rounded-xl border border-[var(--border-default)] bg-[var(--bg-surface)] p-4">
-          <div className="flex size-11 shrink-0 items-center justify-center rounded-lg bg-[var(--status-success-bg)] text-[var(--status-success)]">
-            <CheckCircle2 className="size-5" aria-hidden="true" />
-          </div>
-          <div className="min-w-0">
-            <p className="text-xs font-medium text-[var(--text-secondary)]">
-              Đủ FLAIR + T1ce (Sẵn sàng)
-            </p>
-            <p className="text-2xl font-bold tabular-nums">
-              {isStatsUnavailable ? '—' : readyCount}
-            </p>
-          </div>
+        <div className="refract-panel refract-panel-lift flex flex-col gap-1.5 p-5">
+          <p className="text-xs font-medium text-[var(--color-muted)]">
+            Đủ FLAIR + T1ce (Sẵn sàng)
+          </p>
+          <p className="refract-figure text-4xl text-[var(--color-accent-hi)]">
+            {isStatsUnavailable ? '—' : readyCount}
+          </p>
         </div>
 
-        <div className="flex items-center gap-3 rounded-xl border border-[var(--border-default)] bg-[var(--bg-surface)] p-4">
-          <div className="flex size-11 shrink-0 items-center justify-center rounded-lg bg-[var(--status-warning-bg)] text-[var(--status-warning)]">
-            <Clock className="size-5" aria-hidden="true" />
-          </div>
-          <div className="min-w-0">
-            <p className="text-xs font-medium text-[var(--text-secondary)]">
-              Thiếu xung / Đang xử lý
-            </p>
-            <p className="text-2xl font-bold tabular-nums">
-              {isStatsUnavailable ? '—' : missingCount + activeJobsCount}
-            </p>
-          </div>
+        <div className="refract-panel refract-panel-lift flex flex-col gap-1.5 p-5">
+          <p className="text-xs font-medium text-[var(--color-muted)]">
+            Thiếu xung / Đang xử lý
+          </p>
+          <p className="refract-figure text-4xl text-[var(--color-ink)]">
+            {isStatsUnavailable ? '—' : missingCount + activeJobsCount}
+          </p>
         </div>
       </section>
 
       <section className="flex flex-col gap-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-lg font-semibold text-[var(--text-primary)]">
+          <h2 className="font-display text-lg font-normal text-[var(--color-ink)]">
             Ca chụp gần đây
           </h2>
         </div>
 
-        <div className="flex flex-col items-stretch gap-3 rounded-lg border border-[var(--border-default)] bg-[var(--bg-surface)] p-3.5 sm:flex-row sm:flex-wrap sm:items-center sm:p-4">
+        <div className="refract-panel flex flex-col items-stretch gap-3 p-4 sm:flex-row sm:flex-wrap sm:items-center">
           <div className="relative min-w-0 flex-1 sm:max-w-md sm:min-w-[240px]">
             <label htmlFor="overview-case-search" className="sr-only">
               Tìm theo mã bệnh nhân hoặc ngày chụp
             </label>
             <Search
-              className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-[var(--text-secondary)]"
+              className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-[var(--text-muted)]"
               aria-hidden="true"
             />
             <Input
@@ -249,7 +231,7 @@ export function DoctorOverviewPage() {
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Tìm theo mã bệnh nhân, ngày chụp..."
+              placeholder="Tìm mã bệnh nhân hoặc ngày chụp"
               className="pl-9 pr-10"
             />
             {searchQuery && (

@@ -34,14 +34,14 @@ export function Pagination({
     <nav
       aria-label="Phân trang"
       className={cn(
-        'flex flex-col items-center justify-between gap-2.5 rounded-lg border border-[var(--border-default)] bg-[var(--bg-surface)] px-3 py-2.5 text-sm sm:flex-row sm:px-4',
+        'refract-panel flex flex-col items-center justify-between gap-3 px-5 py-3 text-sm sm:flex-row',
         className,
       )}
     >
       <p className="text-[var(--text-secondary)] tabular-nums">
-        Hiển thị <strong className="text-[var(--text-primary)]">{startItem}</strong>–
-        <strong className="text-[var(--text-primary)]">{endItem}</strong> trên tổng{' '}
-        <strong className="text-[var(--text-primary)]">{total}</strong> kết quả
+        Hiển thị <strong className="font-medium text-[var(--text-primary)]">{startItem}</strong>–
+        <strong className="font-medium text-[var(--text-primary)]">{endItem}</strong> trên tổng{' '}
+        <strong className="font-medium text-[var(--text-primary)]">{total}</strong> kết quả
       </p>
 
       <div className="flex items-center gap-2">
@@ -56,7 +56,7 @@ export function Pagination({
           icon={<ChevronLeft className="size-4" />}
         />
 
-        <span className="inline-flex h-9 items-center px-2.5 text-sm font-medium text-[var(--text-primary)] tabular-nums">
+        <span className="inline-flex h-9 items-center px-3 text-sm font-medium text-[var(--text-primary)] tabular-nums">
           Trang {safePage} / {totalPages}
         </span>
 

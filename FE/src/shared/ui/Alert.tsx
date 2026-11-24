@@ -57,19 +57,20 @@ export function Alert({
   return (
     <div
       role={role}
+      aria-live={variant === 'error' ? 'assertive' : undefined}
       className={cn(
-        'flex items-start gap-3 rounded-lg border px-4 py-3 text-sm',
+        'flex items-start gap-3 rounded-[var(--radius-inner)] border px-4 py-3 text-sm',
         ALERT_STYLES[variant],
         className,
       )}
     >
       <Icon
-        className={cn('size-5 shrink-0', ALERT_ICON_COLOR[variant])}
+        className={cn('mt-0.5 size-4 shrink-0', ALERT_ICON_COLOR[variant])}
         aria-hidden="true"
       />
       <div className="flex min-w-0 flex-1 flex-col gap-1 leading-5">
         {title && (
-          <p className="font-semibold leading-5 text-[var(--text-primary)]">
+          <p className="font-medium leading-5 text-[var(--text-primary)]">
             {title}
           </p>
         )}
@@ -80,7 +81,7 @@ export function Alert({
         )}
         {children}
         {action && (
-          <div className="mt-1.5 flex flex-wrap items-center gap-2">{action}</div>
+          <div className="mt-2 flex flex-wrap items-center gap-2">{action}</div>
         )}
       </div>
     </div>

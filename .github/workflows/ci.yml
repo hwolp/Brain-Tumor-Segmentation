@@ -1,0 +1,158 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [master, main]
+  workflow_call:
+    inputs:
+      run_docker_check:
+        description: Build production Docker images and validate Azure deploy manifests
+        required: false
+        type: boolean
+        default: true
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  backend:
+    name: Backend Lint, OpenAPI & Pytest
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: bts_test
+          POSTGRES_USER: bts_user
+          POSTGRES_PASSWORD: bts_ci_test_pw
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U bts_user -d bts_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: "BE/requirements.txt"
+
+      - name: Ensure PostgreSQL 16 client tools for backup/restore tests
+        run: |
+          pg_major=0
+          if command -v pg_dump >/dev/null 2>&1; then
+            pg_major="$(pg_dump --version | awk '{print $3}' | cut -d. -f1 || echo 0)"
+          fi
+          if [ "${pg_major:-0}" -lt 16 ]; then
+            sudo apt-get update
+            sudo apt-get install -y --no-install-recommends postgresql-client-16
+          fi
+          pg_dump --version
+          pg_restore --version
+
+      - name: Install Backend dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r BE/requirements.txt
+
+      - name: Run Ruff lint
+        run: |
+          ruff check BE/app BE/scripts BE/migrations BE/worker/service.py BE/tests/conftest.py BE/tests/unit BE/tests/integration BE/tests/contract BE/tests/ai/test_p7_real_worker_e2e.py
+
+      - name: Verify deterministic OpenAPI schema
+        env:
+          PYTHONPATH: BE
+        run: python -m scripts.export_openapi --check
+
+      - name: Run Alembic migrations & schema check
+        env:
+          PYTHONPATH: BE
+          DATABASE_URL: postgresql+psycopg://bts_user:bts_ci_test_pw@127.0.0.1:5432/bts_test
+        run: |
+          python -m alembic -c BE/alembic.ini upgrade head
+          python -m alembic -c BE/alembic.ini check
+
+      - name: Run Backend unit, integration, and contract tests
+        env:
+          TEST_DATABASE_URL: postgresql+psycopg://bts_user:bts_ci_test_pw@127.0.0.1:5432/bts_test
+        run: python -m pytest BE/tests/unit BE/tests/integration BE/tests/contract -v
+
+  frontend:
+    name: Frontend Typecheck, Vitest & Build
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: FE
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: "FE/package-lock.json"
+
+      - name: Install Frontend dependencies
+        run: npm ci
+
+      - name: Run TypeScript typecheck
+        run: npm run typecheck
+
+      - name: Run Vitest unit/component tests
+        run: npm test -- --run
+
+      - name: Run production Vite build
+        env:
+          VITE_USE_FIXTURES: "false"
+        run: npm run build
+
+  docker-and-deploy-check:
+    name: Docker Build & Azure Manifest Check
+    if: ${{ github.event_name != 'workflow_call' || inputs.run_docker_check }}
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Validate Azure deploy script and Compose manifest
+        run: |
+          bash -n deploy/azure/deploy.sh
+          if grep -q $'\r' deploy/azure/deploy.sh; then
+            echo "deploy/azure/deploy.sh must use LF line endings" >&2
+            exit 1
+          fi
+          docker compose --env-file deploy/azure/azure.env.example -f deploy/azure/docker-compose.azure.yml config -q
+
+      - name: Test build API production Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./BE
+          file: ./BE/Dockerfile
+          push: false
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,mode=max,scope=api
+
+      - name: Test build Web production Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./FE
+          file: ./FE/Dockerfile.prod
+          push: false
+          cache-from: type=gha,scope=web
+          cache-to: type=gha,mode=max,scope=web

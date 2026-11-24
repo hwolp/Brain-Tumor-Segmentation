@@ -147,15 +147,15 @@ export function AppShell({ role }: AppShellProps) {
               title={isCompact ? item.label : undefined}
               className={({ isActive }) =>
                 cn(
-                  'flex h-10 min-h-[40px] items-center gap-3 rounded-lg border px-3 py-2 text-sm font-medium transition-colors duration-150',
+                  'flex h-9 min-h-[36px] items-center gap-2.5 rounded-[var(--radius-pill)] border px-3.5 text-sm font-medium transition-colors duration-150 ease-[var(--ease-out)]',
                   isCompact && 'justify-center px-2',
                   isActive
-                    ? 'border-[var(--status-info-border)] bg-[var(--status-info-bg)] text-[var(--action-primary)]'
-                    : 'border-transparent text-[var(--text-primary)] hover:bg-[var(--bg-muted)]',
+                    ? 'border-[var(--color-accent)]/25 bg-[var(--color-accent-soft)] text-[var(--color-accent-hi)] shadow-[var(--edge-light)]'
+                    : 'border-transparent text-[var(--color-ink-2)] hover:bg-[var(--color-paper-2)] hover:text-[var(--color-ink)]',
                 )
               }
             >
-              <Icon className="size-5 shrink-0" aria-hidden="true" />
+              <Icon className="size-4 shrink-0" aria-hidden="true" />
               {!isCompact && <span className="truncate">{item.label}</span>}
               {isCompact && <span className="sr-only">{item.label}</span>}
             </NavLink>
@@ -166,10 +166,10 @@ export function AppShell({ role }: AppShellProps) {
   );
 
   return (
-    <div className="flex min-h-dvh w-full bg-[var(--bg-canvas)] text-[var(--text-primary)]">
+    <div className="flex min-h-dvh w-full bg-[var(--color-paper)] text-[var(--color-ink)]">
       <a
         href="#main-content"
-        className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:rounded-md focus:bg-[var(--action-primary)] focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:text-white"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:rounded-[var(--radius-pill)] focus:bg-[var(--color-accent)] focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:text-[var(--color-accent-ink)]"
       >
         Chuyển đến nội dung chính
       </a>
@@ -179,23 +179,23 @@ export function AppShell({ role }: AppShellProps) {
         data-print-hidden="true"
         aria-label="Điều hướng chính"
         className={cn(
-          'hidden lg:flex lg:flex-col lg:shrink-0 lg:border-r lg:border-[var(--border-default)] lg:bg-[var(--bg-surface)] transition-[width] duration-150',
+          'hidden lg:flex lg:flex-col lg:shrink-0 lg:border-r lg:border-[var(--color-rule)] lg:bg-[color-mix(in_oklab,var(--color-light)_84%,transparent)] transition-[width] duration-150',
           collapsed ? 'lg:w-[72px]' : 'lg:w-64',
         )}
       >
         <div
           className={cn(
-            'flex h-16 items-center border-b border-[var(--border-default)]',
-            collapsed ? 'justify-center px-2' : 'justify-between pl-5 pr-3',
+            'flex h-16 items-center border-b border-[var(--color-rule-2)]',
+            collapsed ? 'justify-center px-2' : 'justify-between px-4',
           )}
         >
           {!collapsed && (
             <div className="flex min-w-0 items-center gap-2.5">
               <Brain
-                className="size-6 shrink-0 text-[var(--action-primary)]"
+                className="size-5 shrink-0 text-[var(--color-accent)]"
                 aria-hidden="true"
               />
-              <span className="truncate text-sm font-bold text-[var(--text-primary)]">
+              <span className="font-display truncate text-base font-medium text-[var(--color-ink)]">
                 TDA-SegUNet
               </span>
             </div>
@@ -222,7 +222,7 @@ export function AppShell({ role }: AppShellProps) {
         <div
           className={cn(
             'border-t border-[var(--border-default)] py-3',
-            collapsed ? 'px-2' : 'px-5',
+            collapsed ? 'px-2' : 'px-4',
           )}
         >
           <div className={cn('flex items-center gap-2', collapsed && 'justify-center')}>
@@ -251,12 +251,14 @@ export function AppShell({ role }: AppShellProps) {
             className="relative z-10 flex w-72 max-w-[85vw] flex-col border-r border-[var(--border-default)] bg-[var(--bg-surface)]"
           >
             <div className="flex h-16 items-center justify-between border-b border-[var(--border-default)] px-4">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2.5">
                 <Brain
-                  className="size-6 text-[var(--action-primary)]"
+                  className="size-5 text-[var(--action-primary)]"
                   aria-hidden="true"
                 />
-                <span className="text-sm font-bold">TDA-SegUNet</span>
+                <span className="text-base font-semibold text-[var(--text-primary)]">
+                  TDA-SegUNet
+                </span>
               </div>
               <IconButton
                 aria-label="Đóng menu điều hướng"
@@ -276,7 +278,7 @@ export function AppShell({ role }: AppShellProps) {
       <div className="flex min-w-0 flex-1 flex-col">
         <header
           data-print-hidden="true"
-          className="flex min-h-16 flex-wrap items-center justify-between gap-3 border-b border-[var(--border-default)] bg-[var(--bg-surface)] px-3 py-2.5 sm:px-6 lg:h-16 lg:flex-nowrap lg:py-0"
+          className="flex min-h-16 flex-wrap items-center justify-between gap-3 border-b border-[var(--color-rule)] bg-[color-mix(in_oklab,var(--color-light)_80%,transparent)] px-4 py-2 sm:px-6 lg:h-16 lg:flex-nowrap lg:py-0"
         >
           <div className="flex items-center gap-3">
             <IconButton
@@ -285,9 +287,9 @@ export function AppShell({ role }: AppShellProps) {
               variant="outline"
               className="lg:hidden"
               onClick={() => setMobileMenuOpen(true)}
-              icon={<Menu className="size-5" />}
+              icon={<Menu className="size-4" />}
             />
-            <span className="text-sm font-semibold text-[var(--text-primary)]">
+            <span className="text-sm font-medium text-[var(--text-primary)]">
               {workspaceTitle}
             </span>
           </div>
@@ -319,7 +321,7 @@ export function AppShell({ role }: AppShellProps) {
         {fixtureMode && (
           <div
             data-print-hidden="true"
-            className="mx-auto w-full max-w-[1600px] px-3 pt-3 sm:px-5 lg:px-6"
+            className="mx-auto w-full max-w-[1600px] px-4 pt-4 sm:px-6"
           >
             <Alert
               variant="warning"
@@ -332,7 +334,7 @@ export function AppShell({ role }: AppShellProps) {
         <main
           id="main-content"
           tabIndex={-1}
-          className="mx-auto w-full max-w-[1600px] flex-1 p-3 outline-none sm:p-5 lg:p-6"
+          className="mx-auto w-full max-w-[1600px] flex-1 p-4 outline-none sm:p-6"
         >
           <Outlet />
         </main>

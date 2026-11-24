@@ -22,6 +22,7 @@ import {
   Save,
   SkipBack,
   SkipForward,
+  Trash2,
   Undo2,
 } from 'lucide-react';
 import {
@@ -32,6 +33,7 @@ import {
 import { fetchCaseDetail } from '@/shared/api/endpoints';
 import { ApiClientError, isAbortError, normalizeApiError } from '@/shared/api/errors';
 import {
+  deleteMaskVersion,
   downloadMaskVersionExport,
   downloadProtectedFileBuffer,
   fetchAllMaskVersions,
@@ -58,6 +60,7 @@ import { formatVolumeSummary } from '@/shared/lib/volume';
 import {
   Alert,
   Button,
+  ConfirmDialog,
   ErrorState,
   IconButton,
   buttonVariants,
@@ -157,7 +160,7 @@ function isEditableElementFocused(target: EventTarget | null): boolean {
 
 export function ViewerWorkspacePage() {
   const { id = '' } = useParams<{ id: string }>();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const requestedVersionParam = searchParams.get('version')?.trim() || null;
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -246,6 +249,12 @@ export function ViewerWorkspacePage() {
   const [maximizedPaneId, setMaximizedPaneId] = React.useState<string | null>(
     null,
   );
+  const [deleteMaskModalOpen, setDeleteMaskModalOpen] = React.useState(false);
+  const [isDeletingMask, setIsDeletingMask] = React.useState(false);
+  const [deleteMaskError, setDeleteMaskError] = React.useState<{
+    message: string;
+    requestId: string | null;
+  } | null>(null);
   const lastNonZeroOpacityRef = React.useRef<number>(40);
 
   React.useEffect(() => {
@@ -1238,6 +1247,11 @@ export function ViewerWorkspacePage() {
       if (keyLower === 'f') {
         e.preventDefault();
         setIsFullscreen((prev) => !prev);
+        return;
+      }
+      if (keyLower === 'i') {
+        e.preventDefault();
+        setInspectorCollapsed((prev) => !prev);
       }
     };
 
@@ -1810,9 +1824,9 @@ export function ViewerWorkspacePage() {
   }, []);
 
   const darkOutlineBtnClass =
-    'border-slate-700 bg-slate-900/90 text-slate-100 hover:border-slate-600 hover:bg-slate-800 disabled:border-slate-800 disabled:bg-slate-900/40 disabled:text-slate-500';
+    'border-[var(--viewer-border)] bg-[var(--viewer-raised)] text-[var(--viewer-text)] hover:border-[var(--viewer-border-strong)] hover:bg-[#232C40] disabled:border-[var(--viewer-border)] disabled:bg-[var(--viewer-bg)] disabled:text-[var(--viewer-text-muted)]';
   const darkSaveBtnClass =
-    'border-emerald-500/60 bg-emerald-600 text-white hover:bg-emerald-500 disabled:border-slate-800 disabled:bg-slate-900/40 disabled:text-slate-500';
+    'border-transparent bg-[#EEF0F5] text-[#0B0E16] hover:bg-white disabled:border-[var(--viewer-border)] disabled:bg-[var(--viewer-bg)] disabled:text-[var(--viewer-text-muted)]';
 
   // Chỉ sử dụng metadata khớp đúng phiên bản đang chọn để không bao giờ trộn số liệu giữa v1 và v2
   const matchedMetadata = React.useMemo(
@@ -2013,6 +2027,98 @@ export function ViewerWorkspacePage() {
     }
   };
 
+  const handleConfirmDeleteSelectedMask = async () => {
+    const target = selectedVersion;
+    if (!target || target.source !== 'manual') return;
+    setIsDeletingMask(true);
+    setDeleteMaskError(null);
+    try {
+      const deletion = await deleteMaskVersion(target.id, { fixtureMode });
+      localSavedVersionsRef.current.delete(target.id);
+      knownVersionIdsRef.current?.delete(target.id);
+      const remaining = maskVersions.filter((v) => v.id !== target.id);
+      const nextVersion = remaining[0] ?? null;
+
+      setPendingRetry(null);
+      engineRef.current.discardChanges();
+      syncStoreFromEngine(currentSliceZeroBased);
+      loadedBaseVersionIdRef.current = nextVersion?.id ?? null;
+      loadedVersionKeyRef.current = null;
+      setVersionMetadata(null);
+      setActiveVersionId(nextVersion?.id ?? null);
+      setSelectedVersionId(nextVersion?.id ?? null);
+      setVersionLoadRevision((v) => v + 1);
+
+      if (searchParams.get('version') === target.id) {
+        const nextParams = new URLSearchParams(searchParams);
+        if (nextVersion) {
+          nextParams.set('version', nextVersion.id);
+          lastHandledUrlVersionRef.current = nextVersion.id;
+        } else {
+          nextParams.delete('version');
+          lastHandledUrlVersionRef.current = null;
+        }
+        setSearchParams(nextParams, { replace: true });
+      }
+
+      queryClient.setQueryData<PaginatedResponse<MaskVersionDto> | null>(
+        maskVersionsQueryKey,
+        (old) => {
+          if (!old) return old;
+          const items = old.items.filter((item) => item.id !== target.id);
+          return {
+            ...old,
+            items,
+            total: Math.max(0, old.total - 1),
+          };
+        },
+      );
+      queryClient.setQueryData<typeof caseQuery.data>(caseQueryKey, (old) =>
+        old
+          ? {
+              ...old,
+              caseData: {
+                ...old.caseData,
+                latest_mask_version_id:
+                  old.caseData.latest_mask_version_id === target.id
+                    ? (nextVersion?.id ?? null)
+                    : old.caseData.latest_mask_version_id,
+              },
+              maskVersions: old.maskVersions.filter(
+                (item) => item.id !== target.id,
+              ),
+            }
+          : old,
+      );
+
+      setDeleteMaskModalOpen(false);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: caseQueryKey, exact: true }),
+        queryClient.invalidateQueries({
+          queryKey: maskVersionsQueryKey,
+          exact: true,
+        }),
+      ]);
+
+      pushToast({
+        variant: deletion.status === 'deleting' ? 'info' : 'success',
+        title: `Đã xóa phiên bản v${target.version_number}`,
+        description:
+          deletion.status === 'deleting'
+            ? 'Phiên bản mask thủ công đã được gỡ; hệ thống đang dọn tệp lưu trữ nền.'
+            : 'Phiên bản mask thủ công đã được xóa và giải phóng dung lượng.',
+      });
+    } catch (error) {
+      const normalized = normalizeApiError(error);
+      setDeleteMaskError({
+        message: normalized.message,
+        requestId: normalized.requestId,
+      });
+    } finally {
+      setIsDeletingMask(false);
+    }
+  };
+
   if (caseQuery.isError && (!caseQuery.data || isAccessOrNotFoundError)) {
     return (
       <div className="flex flex-col gap-4">
@@ -2040,75 +2146,82 @@ export function ViewerWorkspacePage() {
       data-volume-status={volumeLoadStatus}
       data-fullscreen={isFullscreen ? 'true' : 'false'}
       className={cn(
-        'flex flex-col gap-2.5 bg-[var(--viewer-bg)] text-[var(--viewer-text)] sm:gap-3',
+        'flex flex-col gap-2 bg-[var(--viewer-bg)] text-[var(--viewer-text)]',
         isFullscreen
-          ? 'fixed inset-0 z-50 h-dvh w-screen overflow-y-auto rounded-none border-0 bg-[#0B1020] p-2.5 sm:p-3'
-          : 'rounded-xl border border-[var(--viewer-border)] p-3 sm:p-3.5',
+          ? 'fixed inset-0 z-50 h-dvh w-screen overflow-hidden rounded-none border-0 bg-[var(--viewer-bg)] p-2'
+          : 'rounded-[var(--radius-card)] border border-[var(--viewer-border)] p-2.5 shadow-[var(--shadow-cast)] lg:h-[calc(100dvh-5.75rem)] lg:min-h-[680px] lg:overflow-hidden',
       )}
     >
       {/* Top toolbar */}
-      <div className="flex flex-wrap items-center justify-between gap-2.5 rounded-lg border border-[var(--viewer-border)] bg-[var(--viewer-surface)] px-3 py-2 sm:px-3.5">
-        <div className="flex min-w-0 flex-wrap items-center gap-2.5">
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[var(--viewer-border)] bg-[var(--viewer-surface)] px-2 py-1">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
           <Link
             to={`/doctor/cases/${id}`}
+            aria-label="Chi tiết ca"
+            title="Quay lại chi tiết ca"
             onClick={(e) => handleLeaveClick(e, `/doctor/cases/${id}`)}
-            className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-slate-700/80 bg-slate-900/90 px-2.5 text-xs font-medium text-slate-200 transition-colors hover:border-slate-500 hover:bg-slate-800 hover:text-white"
+            className="inline-flex size-7 shrink-0 items-center justify-center rounded-lg border border-[var(--viewer-border)] bg-[var(--viewer-raised)] text-[var(--viewer-text)] transition-colors duration-150 ease-[var(--ease-out)] hover:border-[var(--viewer-border-strong)] hover:bg-[#232C40]"
           >
             <ArrowLeft className="size-3.5" aria-hidden="true" />
-            Chi tiết ca
           </Link>
           <span
             aria-hidden="true"
-            className="hidden h-5 w-px bg-slate-700/80 sm:block"
+            className="hidden h-4 w-px bg-[var(--viewer-border)] sm:block"
           />
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-sm font-bold text-[var(--viewer-text)] sm:text-base">
-                Trình xem &amp; chỉnh sửa Mask MRI
-              </h1>
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <h1 className="text-sm font-semibold text-[var(--viewer-text)]">
+              Trình xem &amp; chỉnh sửa Mask MRI
+            </h1>
+            <span
+              className={cn(
+                'inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-xs font-medium',
+                editorCapability.canEdit
+                  ? 'border-sky-500/40 bg-sky-950/70 text-sky-300'
+                  : 'border-amber-500/40 bg-amber-950/70 text-amber-300',
+              )}
+            >
               <span
+                aria-hidden="true"
                 className={cn(
-                  'inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-semibold',
-                  editorCapability.canEdit
-                    ? 'border-sky-500/40 bg-sky-950/80 text-sky-300'
-                    : 'border-amber-500/40 bg-amber-950/80 text-amber-300',
+                  'size-1.5 rounded-full',
+                  editorCapability.canEdit ? 'bg-sky-400' : 'bg-amber-400',
                 )}
-              >
+              />
+              {editorCapability.canEdit ? 'Chế độ chỉnh sửa' : 'Chế độ chỉ đọc'}
+            </span>
+            {isDirty && (
+              <span className="inline-flex items-center gap-1.5 rounded-md border border-amber-500/50 bg-amber-950/80 px-2 py-0.5 text-xs font-medium text-amber-200">
                 <span
                   aria-hidden="true"
-                  className={cn(
-                    'size-1.5 rounded-full',
-                    editorCapability.canEdit ? 'bg-sky-400' : 'bg-amber-400',
-                  )}
+                  className="size-1.5 rounded-full bg-amber-400"
                 />
-                {editorCapability.canEdit ? 'Chế độ chỉnh sửa' : 'Chế độ chỉ đọc'}
+                Có thay đổi chưa lưu
               </span>
-              {isDirty && (
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/50 bg-amber-950/90 px-2 py-0.5 text-[11px] font-semibold text-amber-200">
-                  <span
-                    aria-hidden="true"
-                    className="size-1.5 rounded-full bg-amber-400"
-                  />
-                  Có thay đổi chưa lưu
-                </span>
-              )}
-            </div>
-            <p className="break-all font-mono text-[11px] text-[var(--viewer-text-muted)] sm:break-normal">
-              Ca: {id} · Lát {oneBasedSlice}/{totalSlices}
-              <span className="sr-only"> (0-based: {currentSliceZeroBased})</span>
-            </p>
+            )}
+            <span
+              title={`Ca: ${id}`}
+              className="hidden font-mono text-[11px] text-[var(--viewer-text-muted)] tabular-nums md:inline"
+            >
+              Lát {oneBasedSlice} / {totalSlices}
+            </span>
+            <span className="sr-only">
+              Ca: {id} (0-based: {currentSliceZeroBased})
+            </span>
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-1.5">
           {maskVersions.length > 0 && (
-            <label className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-700/80 bg-slate-950/90 pr-1 pl-2.5 text-xs text-slate-300">
-              <span className="font-medium text-slate-400">Phiên bản:</span>
+            <label
+              title="Chọn phiên bản mask"
+              className="inline-flex h-7 items-center rounded-lg border border-[var(--viewer-border)] bg-[var(--viewer-bg)] p-0.5 text-xs text-[var(--viewer-text-secondary)]"
+            >
+              <span className="sr-only">Phiên bản:</span>
               <select
                 aria-label="Chọn phiên bản mask"
                 value={selectedVersionId ?? ''}
                 onChange={(e) => handleVersionSelectChange(e.target.value)}
-                className="h-6 cursor-pointer rounded-md border-0 bg-slate-900 px-2 text-xs font-semibold text-slate-100 focus:ring-1 focus:ring-sky-400 focus:outline-none"
+                className="h-6 cursor-pointer rounded border-0 bg-[var(--viewer-surface)] px-2 text-xs font-medium text-[var(--viewer-text)] focus:ring-1 focus:ring-sky-400 focus:outline-none"
               >
                 {selectedVersionId === null && (
                   <option value="" disabled>
@@ -2124,11 +2237,26 @@ export function ViewerWorkspacePage() {
               </select>
             </label>
           )}
+          {selectedVersion?.source === 'manual' && (
+            <button
+              type="button"
+              aria-label="Xóa phiên bản mask thủ công"
+              title={`Xóa phiên bản thủ công v${selectedVersion.version_number}`}
+              disabled={isSaving || isDeletingMask}
+              onClick={() => {
+                setDeleteMaskError(null);
+                setDeleteMaskModalOpen(true);
+              }}
+              className="inline-flex size-7 cursor-pointer items-center justify-center rounded-lg border border-red-500/40 bg-red-950/50 text-red-300 transition-colors duration-150 hover:bg-red-900/60 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <Trash2 className="size-3.5" aria-hidden="true" />
+            </button>
+          )}
 
           <div
             role="group"
             aria-label="Chọn xung MRI"
-            className="inline-flex h-8 items-center gap-0.5 rounded-lg border border-slate-700/80 bg-slate-950/90 p-0.5"
+            className="inline-flex h-7 items-center gap-0.5 rounded-lg border border-[var(--viewer-border)] bg-[var(--viewer-bg)] p-0.5"
           >
             {(['flair', 't1ce'] as const).map((mod) => {
               const isModDisabled =
@@ -2147,10 +2275,10 @@ export function ViewerWorkspacePage() {
                     }
                   }}
                   className={cn(
-                    'inline-flex h-7 cursor-pointer items-center justify-center rounded-md px-2.5 text-xs font-semibold uppercase transition-colors disabled:cursor-not-allowed disabled:opacity-40',
+                    'inline-flex h-6 cursor-pointer items-center justify-center rounded-md px-2 text-xs font-medium uppercase transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-40',
                     modality === mod
-                      ? 'bg-sky-600 text-white shadow-xs'
-                      : 'text-slate-300 hover:bg-slate-800 hover:text-white',
+                      ? 'bg-[var(--viewer-raised)] text-[var(--viewer-text)] shadow-[inset_0_1px_0_rgba(255,255,255,0.10)]'
+                      : 'text-[var(--viewer-text-secondary)] hover:bg-[var(--viewer-surface)] hover:text-[var(--viewer-text)]',
                   )}
                 >
                   {mod}
@@ -2168,29 +2296,27 @@ export function ViewerWorkspacePage() {
               aria-pressed={!inspectorCollapsed}
               title={
                 inspectorCollapsed
-                  ? 'Hiện bảng thông số bên phải'
-                  : 'Thu gọn bảng thông số bên phải để mở rộng vùng vẽ'
+                  ? 'Hiện bảng thông số bên phải (Phím I)'
+                  : 'Thu gọn bảng thông số bên phải để mở rộng vùng vẽ (Phím I)'
               }
               onClick={() => setInspectorCollapsed((prev) => !prev)}
               className={cn(
-                'inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-lg border px-2.5 text-xs font-medium transition-colors',
+                'inline-flex size-7 cursor-pointer items-center justify-center rounded-lg border transition-colors duration-150',
                 inspectorCollapsed
-                  ? 'border-sky-500/50 bg-sky-950/70 text-sky-200 hover:bg-sky-900/70'
-                  : 'border-slate-700/80 bg-slate-900/90 text-slate-200 hover:border-slate-600 hover:bg-slate-800',
+                  ? 'border-sky-500/40 bg-sky-950/60 text-sky-200 hover:bg-sky-900/70'
+                  : 'border-[var(--viewer-border)] bg-[var(--viewer-raised)] text-[var(--viewer-text)] hover:border-[var(--viewer-border-strong)] hover:bg-[#232C40]',
               )}
             >
               {inspectorCollapsed ? (
                 <PanelRightOpen className="size-3.5 text-sky-400" aria-hidden="true" />
               ) : (
-                <PanelRightClose className="size-3.5 text-slate-300" aria-hidden="true" />
+                <PanelRightClose className="size-3.5 text-[var(--viewer-text-secondary)]" aria-hidden="true" />
               )}
-              <span className="hidden xl:inline">
-                {inspectorCollapsed ? 'Hiện thông số' : 'Ẩn thông số'}
-              </span>
             </button>
 
             <button
               type="button"
+              aria-label={isFullscreen ? 'Thu nhỏ' : 'Toàn màn hình'}
               aria-pressed={isFullscreen}
               title={
                 isFullscreen
@@ -2199,10 +2325,10 @@ export function ViewerWorkspacePage() {
               }
               onClick={() => setIsFullscreen((prev) => !prev)}
               className={cn(
-                'inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-lg border px-3 text-xs font-semibold transition-colors',
+                'inline-flex size-7 cursor-pointer items-center justify-center rounded-lg border transition-colors duration-150',
                 isFullscreen
-                  ? 'border-sky-400 bg-sky-600 text-white hover:bg-sky-500'
-                  : 'border-slate-700/80 bg-slate-900/90 text-slate-100 hover:border-slate-500 hover:bg-slate-800',
+                  ? 'border-sky-500/50 bg-sky-600 text-white hover:bg-sky-500'
+                  : 'border-[var(--viewer-border)] bg-[var(--viewer-raised)] text-[var(--viewer-text)] hover:border-[var(--viewer-border-strong)] hover:bg-[#232C40]',
               )}
             >
               {isFullscreen ? (
@@ -2210,7 +2336,6 @@ export function ViewerWorkspacePage() {
               ) : (
                 <Maximize2 className="size-3.5" aria-hidden="true" />
               )}
-              {isFullscreen ? 'Thu nhỏ' : 'Toàn màn hình'}
             </button>
           </div>
         </div>
@@ -2294,123 +2419,227 @@ export function ViewerWorkspacePage() {
       {/* Main workstation grid */}
       <div
         className={cn(
-          'grid grid-cols-1 items-start gap-3',
+          'grid min-h-0 flex-1 grid-cols-1 gap-2 lg:items-stretch',
           !inspectorCollapsed &&
-            'lg:grid-cols-[minmax(0,1fr)_280px] xl:grid-cols-[minmax(0,1fr)_316px]',
+            'lg:grid-cols-[minmax(0,1fr)_264px] xl:grid-cols-[minmax(0,1fr)_280px]',
         )}
       >
         {/* Viewport canvas + slice navigation */}
-        <div className="flex min-w-0 flex-col gap-2.5">
-          {/* Unified Painting Dock (2-tier structured clinical ribbon) */}
-          <div className="flex flex-col gap-2 rounded-lg border border-[var(--viewer-border)] bg-[var(--viewer-surface)] px-3 py-2">
-            {/* Tier 1: Chế độ thao tác · Hoàn tác/Làm lại · Bố cục khung nhìn · Lưu & Xuất */}
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div
-                role="group"
-                aria-label="Công cụ tương tác"
-                className="flex flex-wrap items-center gap-2"
-              >
-                {/* Cụm chuyển đổi công cụ (Segmented Tool Switcher) */}
-                <div className="inline-flex items-center gap-0.5 rounded-lg border border-slate-700/80 bg-slate-950/90 p-0.5">
-                  <button
-                    type="button"
-                    aria-pressed={!canEditMask || activeTool === 'view'}
-                    title="Chế độ xem lát cắt và di chuyển tâm chữ thập (Phím tắt: V)"
-                    onClick={() => setActiveTool('view')}
-                    className={cn(
-                      'inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-md px-2.5 text-xs font-semibold transition-colors',
-                      !canEditMask || activeTool === 'view'
-                        ? 'bg-sky-600 text-white shadow-xs'
-                        : 'text-slate-300 hover:bg-slate-800 hover:text-white',
-                    )}
-                  >
-                    <Eye className="size-3.5" aria-hidden="true" />
-                    Xem lát
-                  </button>
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-2">
+          {/* Unified Single-Row Compact Clinical Ribbon */}
+          <div className="flex flex-wrap items-center justify-between gap-1.5 rounded-xl border border-[var(--viewer-border)] bg-[var(--viewer-surface)] px-2 py-1">
+            <div
+              role="group"
+              aria-label="Công cụ tương tác"
+              className="flex flex-wrap items-center gap-1.5"
+            >
+              {/* Cụm chuyển đổi công cụ (Segmented Tool Switcher) */}
+              <div className="inline-flex items-center gap-0.5 rounded-lg border border-[var(--viewer-border)] bg-[var(--viewer-bg)] p-0.5">
+                <button
+                  type="button"
+                  aria-label="Xem lát"
+                  aria-pressed={!canEditMask || activeTool === 'view'}
+                  title="Chế độ xem lát cắt và di chuyển tâm chữ thập (Phím V)"
+                  onClick={() => setActiveTool('view')}
+                  className={cn(
+                    'inline-flex size-7 cursor-pointer items-center justify-center rounded-md transition-colors duration-150',
+                    !canEditMask || activeTool === 'view'
+                      ? 'bg-[var(--viewer-raised)] text-[var(--viewer-text)] shadow-[inset_0_1px_0_rgba(255,255,255,0.10)]'
+                      : 'text-[var(--viewer-text-secondary)] hover:bg-[var(--viewer-surface)] hover:text-[var(--viewer-text)]',
+                  )}
+                >
+                  <Eye className="size-3.5" aria-hidden="true" />
+                </button>
 
-                  <button
-                    type="button"
-                    disabled={!canEditMask}
-                    aria-pressed={canEditMask && activeTool === 'brush'}
-                    title={
-                      canEditMask
-                        ? 'Tô nhãn đang chọn trên lát axial hiện tại (Phím tắt: B)'
-                        : (editorCapability.reason ?? 'Phiên đang chờ xác thực lại')
-                    }
-                    onClick={() => setActiveTool('brush')}
-                    className={cn(
-                      'inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-md px-2.5 text-xs font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-40',
-                      canEditMask && activeTool === 'brush'
-                        ? 'bg-sky-600 text-white shadow-xs'
-                        : 'text-slate-300 hover:bg-slate-800 hover:text-white',
-                    )}
-                  >
-                    {!canEditMask ? (
-                      <Lock className="size-3.5" aria-hidden="true" />
-                    ) : (
-                      <Paintbrush className="size-3.5" aria-hidden="true" />
-                    )}
-                    Tô mask
-                  </button>
+                <button
+                  type="button"
+                  aria-label="Tô mask"
+                  disabled={!canEditMask}
+                  aria-pressed={canEditMask && activeTool === 'brush'}
+                  title={
+                    canEditMask
+                      ? 'Tô nhãn đang chọn trên lát axial hiện tại (Phím B)'
+                      : (editorCapability.reason ?? 'Phiên đang chờ xác thực lại')
+                  }
+                  onClick={() => setActiveTool('brush')}
+                  className={cn(
+                    'inline-flex size-7 cursor-pointer items-center justify-center rounded-md transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-40',
+                    canEditMask && activeTool === 'brush'
+                      ? 'bg-sky-600 text-white'
+                      : 'text-[var(--viewer-text-secondary)] hover:bg-[var(--viewer-surface)] hover:text-[var(--viewer-text)]',
+                  )}
+                >
+                  {!canEditMask ? (
+                    <Lock className="size-3.5" aria-hidden="true" />
+                  ) : (
+                    <Paintbrush className="size-3.5" aria-hidden="true" />
+                  )}
+                </button>
 
-                  <button
-                    type="button"
-                    disabled={!canEditMask}
-                    aria-pressed={canEditMask && activeTool === 'erase'}
-                    title={
-                      canEditMask
-                        ? 'Xóa nhãn về nền (0) cho tất cả nhãn tại các voxel chạm tới trên lát axial hiện tại (Phím tắt: E)'
-                        : (editorCapability.reason ?? 'Phiên đang chờ xác thực lại')
-                    }
-                    onClick={() => setActiveTool('erase')}
-                    className={cn(
-                      'inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-md px-2.5 text-xs font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-40',
-                      canEditMask && activeTool === 'erase'
-                        ? 'bg-rose-600 text-white shadow-xs'
-                        : 'text-slate-300 hover:bg-slate-800 hover:text-white',
-                    )}
-                  >
-                    <Eraser className="size-3.5" aria-hidden="true" />
-                    Xóa mask
-                  </button>
-                </div>
-
-                {/* Cụm Hoàn tác / Làm lại (Segmented History) */}
-                <div className="inline-flex items-center gap-0.5 rounded-lg border border-slate-700/80 bg-slate-950/90 p-0.5">
-                  <button
-                    type="button"
-                    disabled={!canEditMask || !canUndoCurrentSlice}
-                    title="Hoàn tác nét vẽ trên lát hiện tại (Ctrl+Z)"
-                    onClick={handleUndo}
-                    className="inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-md px-2.5 text-xs font-medium text-slate-200 transition-colors hover:bg-slate-800 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
-                  >
-                    <Undo2 className="size-3.5" aria-hidden="true" />
-                    Hoàn tác
-                  </button>
-                  <span
-                    aria-hidden="true"
-                    className="h-4 w-px bg-slate-800"
-                  />
-                  <button
-                    type="button"
-                    disabled={!canEditMask || !canRedoCurrentSlice}
-                    title="Làm lại nét vẽ trên lát hiện tại (Ctrl+Shift+Z)"
-                    onClick={handleRedo}
-                    className="inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-md px-2.5 text-xs font-medium text-slate-200 transition-colors hover:bg-slate-800 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
-                  >
-                    <Redo2 className="size-3.5" aria-hidden="true" />
-                    Làm lại
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  aria-label="Xóa mask"
+                  disabled={!canEditMask}
+                  aria-pressed={canEditMask && activeTool === 'erase'}
+                  title={
+                    canEditMask
+                      ? 'Xóa nhãn về nền (0) tại các voxel chạm tới trên lát axial hiện tại (Phím E)'
+                      : (editorCapability.reason ?? 'Phiên đang chờ xác thực lại')
+                  }
+                  onClick={() => setActiveTool('erase')}
+                  className={cn(
+                    'inline-flex size-7 cursor-pointer items-center justify-center rounded-md transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-40',
+                    canEditMask && activeTool === 'erase'
+                      ? 'bg-rose-700 text-white'
+                      : 'text-[var(--viewer-text-secondary)] hover:bg-[var(--viewer-surface)] hover:text-[var(--viewer-text)]',
+                  )}
+                >
+                  <Eraser className="size-3.5" aria-hidden="true" />
+                </button>
               </div>
 
-              <div className="flex flex-wrap items-center gap-2">
-                {/* Cụm Bố cục khung nhìn (Segmented Layout Switcher) */}
-                {!isSinglePaneViewport && (
+              {/* Cụm Hoàn tác / Làm lại (Segmented History) */}
+              <div className="inline-flex items-center gap-0.5 rounded-lg border border-[var(--viewer-border)] bg-[var(--viewer-bg)] p-0.5">
+                <button
+                  type="button"
+                  aria-label="Hoàn tác"
+                  disabled={!canEditMask || !canUndoCurrentSlice}
+                  title="Hoàn tác nét vẽ trên lát hiện tại (Ctrl+Z)"
+                  onClick={handleUndo}
+                  className="inline-flex size-7 cursor-pointer items-center justify-center rounded-md text-[var(--viewer-text-secondary)] transition-colors duration-150 hover:bg-[var(--viewer-raised)] hover:text-[var(--viewer-text)] disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  <Undo2 className="size-3.5" aria-hidden="true" />
+                </button>
+                <span
+                  aria-hidden="true"
+                  className="h-4 w-px bg-[var(--viewer-border)]"
+                />
+                <button
+                  type="button"
+                  aria-label="Làm lại"
+                  disabled={!canEditMask || !canRedoCurrentSlice}
+                  title="Làm lại nét vẽ trên lát hiện tại (Ctrl+Shift+Z)"
+                  onClick={handleRedo}
+                  className="inline-flex size-7 cursor-pointer items-center justify-center rounded-md text-[var(--viewer-text-secondary)] transition-colors duration-150 hover:bg-[var(--viewer-raised)] hover:text-[var(--viewer-text)] disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  <Redo2 className="size-3.5" aria-hidden="true" />
+                </button>
+              </div>
+
+              {/* Nhãn tô nhanh + Cỡ cọ + Ẩn/Hiện lớp phủ mask */}
+              <div
+                role="group"
+                aria-label="Chọn nhanh nhãn và cỡ cọ"
+                className="flex flex-wrap items-center gap-1.5"
+              >
+                <div className="inline-flex flex-wrap items-center gap-0.5 rounded-lg border border-[var(--viewer-border)] bg-[var(--viewer-bg)] p-0.5">
+                  {BRATS_TUMOR_LABEL_IDS.map((labelId) => {
+                    const spec = BRATS_LABELS[labelId];
+                    const isSelected = activeLabel === labelId;
+                    return (
+                      <button
+                        key={`dock-lbl-${labelId}`}
+                        type="button"
+                        disabled={!canEditMask}
+                        aria-label={`Chọn nhanh nhãn ${labelId}`}
+                        aria-pressed={isSelected}
+                        title={`${spec.shortName} — ${spec.description} (Phím ${labelId})`}
+                        onClick={() => {
+                          setActiveLabel(labelId);
+                          if (activeTool === 'view') {
+                            setActiveTool('brush');
+                          }
+                        }}
+                        className={cn(
+                          'inline-flex h-7 cursor-pointer items-center gap-1 rounded-md border px-2 font-mono text-xs font-medium transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-40',
+                          isSelected
+                            ? 'border-[var(--viewer-border-strong)] bg-[var(--viewer-raised)] text-[var(--viewer-text)] shadow-[inset_0_1px_0_rgba(255,255,255,0.10)]'
+                            : 'border-transparent text-[var(--viewer-text-secondary)] hover:bg-[var(--viewer-surface)] hover:text-[var(--viewer-text)]',
+                        )}
+                      >
+                        <span
+                          className="size-2.5 rounded-full border border-white/25"
+                          style={{ backgroundColor: spec.hexColor ?? undefined }}
+                          aria-hidden="true"
+                        />
+                        <span>{labelId}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div className="inline-flex h-7 items-center rounded-lg border border-[var(--viewer-border)] bg-[var(--viewer-bg)] px-0.5 text-xs">
+                  <button
+                    type="button"
+                    aria-label="Giảm cỡ cọ"
+                    disabled={!canEditMask || brushRadius <= 1}
+                    title="Giảm bán kính cọ 1 pixel (Phím [)"
+                    onClick={() => setBrushRadius(brushRadius - 1)}
+                    className="inline-flex size-6 cursor-pointer items-center justify-center rounded text-[var(--viewer-text-secondary)] transition-colors duration-150 hover:bg-[var(--viewer-raised)] hover:text-[var(--viewer-text)] disabled:opacity-40"
+                  >
+                    -
+                  </button>
+                  <span
+                    className="inline-flex min-w-[44px] items-center justify-center gap-1 px-1 font-mono text-[11px] font-medium text-[var(--viewer-text)] tabular-nums"
+                    title="Bán kính cọ vẽ hiện tại (Giữ Alt + Lăn chuột để chỉnh nhanh)"
+                  >
+                    <span
+                      className="rounded-full border border-white/25"
+                      style={{
+                        width: `${Math.min(11, Math.max(5, brushRadius + 3))}px`,
+                        height: `${Math.min(11, Math.max(5, brushRadius + 3))}px`,
+                        backgroundColor:
+                          activeTool === 'erase'
+                            ? '#F87171'
+                            : (BRATS_LABELS[activeLabel].hexColor ?? '#F59E0B'),
+                      }}
+                      aria-hidden="true"
+                    />
+                    {brushRadius}px
+                  </span>
+                  <button
+                    type="button"
+                    aria-label="Tăng cỡ cọ"
+                    disabled={!canEditMask || brushRadius >= 20}
+                    title="Tăng bán kính cọ 1 pixel (Phím ])"
+                    onClick={() => setBrushRadius(brushRadius + 1)}
+                    className="inline-flex size-6 cursor-pointer items-center justify-center rounded text-[var(--viewer-text-secondary)] transition-colors duration-150 hover:bg-[var(--viewer-raised)] hover:text-[var(--viewer-text)] disabled:opacity-40"
+                  >
+                    +
+                  </button>
+                </div>
+
+                <button
+                  type="button"
+                  aria-label="Ẩn/Hiện lớp phủ mask"
+                  aria-pressed={maskOpacityPercent > 0}
+                  title="Bật/tắt nhanh lớp phủ mask để đối chiếu nhu mô não gốc (Phím M)"
+                  onClick={handleToggleMaskOverlay}
+                  className={cn(
+                    'inline-flex h-7 cursor-pointer items-center gap-1 rounded-lg border px-2 font-mono text-[11px] font-medium tabular-nums transition-colors duration-150',
+                    maskOpacityPercent > 0
+                      ? 'border-sky-500/40 bg-sky-950/60 text-sky-200 hover:bg-sky-900/70'
+                      : 'border-[var(--viewer-border)] bg-[var(--viewer-bg)] text-[var(--viewer-text-muted)] hover:bg-[var(--viewer-raised)]',
+                  )}
+                >
+                  {maskOpacityPercent > 0 ? (
+                    <Eye className="size-3.5 text-sky-400" aria-hidden="true" />
+                  ) : (
+                    <EyeOff className="size-3.5 text-[var(--viewer-text-muted)]" aria-hidden="true" />
+                  )}
+                  <span>{maskOpacityPercent}%</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-1.5">
+              {/* Cụm Bố cục khung nhìn (Segmented Layout Switcher) */}
+              {!isSinglePaneViewport && (
+                <div className="flex items-center gap-1">
                   <div
                     role="group"
                     aria-label="Bố cục khung nhìn"
-                    className="inline-flex items-center gap-0.5 rounded-lg border border-slate-700/80 bg-slate-950/90 p-0.5"
+                    className="inline-flex items-center gap-0.5 rounded-lg border border-[var(--viewer-border)] bg-[var(--viewer-bg)] p-0.5"
                   >
                     {(
                       [
@@ -2425,166 +2654,69 @@ export function ViewerWorkspacePage() {
                         aria-pressed={effectiveLayoutMode === layout.id}
                         onClick={() => setLayoutMode(layout.id)}
                         className={cn(
-                          'inline-flex h-7 cursor-pointer items-center rounded-md px-2.5 text-xs font-medium whitespace-nowrap transition-colors',
+                          'inline-flex h-7 cursor-pointer items-center rounded-md px-2 text-xs font-medium whitespace-nowrap transition-colors duration-150',
                           effectiveLayoutMode === layout.id
-                            ? 'bg-sky-600 text-white shadow-xs'
-                            : 'text-slate-300 hover:bg-slate-800 hover:text-white',
+                            ? 'bg-[var(--viewer-raised)] text-[var(--viewer-text)] shadow-[inset_0_1px_0_rgba(255,255,255,0.10)]'
+                            : 'text-[var(--viewer-text-secondary)] hover:bg-[var(--viewer-surface)] hover:text-[var(--viewer-text)]',
                         )}
                       >
                         {layout.label}
                       </button>
                     ))}
                   </div>
-                )}
-
-                {/* Cụm Lưu phiên bản & Xuất (.nii.gz) */}
-                <div className="inline-flex items-center gap-1.5">
-                  <button
-                    type="button"
-                    disabled={!canEditMask || !isDirty || isSaving}
-                    title="Lưu phiên bản mask thủ công mới"
-                    onClick={() => {
-                      clearPendingSaveFollowUps();
-                      setSaveNoteModalOpen(true);
-                    }}
-                    className={cn(
-                      'inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-lg border px-3 text-xs font-semibold transition-colors disabled:cursor-not-allowed',
-                      darkSaveBtnClass,
-                    )}
-                  >
-                    <Save className="size-3.5" aria-hidden="true" />
-                    Lưu phiên bản
-                  </button>
 
                   <button
                     type="button"
-                    onClick={handleExportClick}
-                    title="Xuất tệp mask .nii.gz"
+                    aria-label="1 khung vẽ"
+                    aria-pressed={maximizedPaneId === 'pane-axial-editable'}
+                    title="Phóng to hoặc thu nhỏ khung vẽ Axial chiếm toàn bộ chiều ngang"
+                    onClick={() => toggleMaximizePane('pane-axial-editable')}
                     className={cn(
-                      'inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-lg border px-2.5 text-xs font-medium transition-colors',
-                      darkOutlineBtnClass,
+                      'inline-flex size-7 cursor-pointer items-center justify-center rounded-lg border transition-colors duration-150',
+                      maximizedPaneId === 'pane-axial-editable'
+                        ? 'border-sky-500/40 bg-sky-950/60 text-sky-200 hover:bg-sky-900/70'
+                        : 'border-[var(--viewer-border)] bg-[var(--viewer-bg)] text-[var(--viewer-text-secondary)] hover:bg-[var(--viewer-raised)] hover:text-[var(--viewer-text)]',
                     )}
                   >
-                    <Download className="size-3.5" aria-hidden="true" />
-                    Xuất (.nii.gz)
+                    {maximizedPaneId === 'pane-axial-editable' ? (
+                      <Minimize2 className="size-3.5" aria-hidden="true" />
+                    ) : (
+                      <Maximize2 className="size-3.5" aria-hidden="true" />
+                    )}
                   </button>
                 </div>
-              </div>
-            </div>
+              )}
 
-            {/* Tier 2: Chọn nhanh nhãn tô · Cỡ cọ · Ẩn/Hiện lớp phủ mask */}
-            <div
-              role="group"
-              aria-label="Chọn nhanh nhãn và cỡ cọ"
-              className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-800/90 pt-2"
-            >
-              <div className="flex flex-wrap items-center gap-1.5">
-                <span className="text-[11px] font-medium text-slate-400">
-                  Nhãn tô:
-                </span>
-                <div className="inline-flex flex-wrap items-center gap-1 rounded-lg border border-slate-700/80 bg-slate-950/90 p-0.5">
-                  {BRATS_TUMOR_LABEL_IDS.map((labelId) => {
-                    const spec = BRATS_LABELS[labelId];
-                    const isSelected = activeLabel === labelId;
-                    return (
-                      <button
-                        key={`dock-lbl-${labelId}`}
-                        type="button"
-                        disabled={!canEditMask}
-                        aria-label={`Chọn nhanh nhãn ${labelId}`}
-                        aria-pressed={isSelected}
-                        title={`${spec.shortName} — ${spec.description} (Phím tắt: ${labelId})`}
-                        onClick={() => {
-                          setActiveLabel(labelId);
-                          if (activeTool === 'view') {
-                            setActiveTool('brush');
-                          }
-                        }}
-                        className={cn(
-                          'inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-md border px-2.5 text-xs font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-40',
-                          isSelected
-                            ? 'border-sky-400/80 bg-sky-950 text-white shadow-xs'
-                            : 'border-transparent text-slate-300 hover:bg-slate-800/80 hover:text-white',
-                        )}
-                      >
-                        <span
-                          className="size-2.5 rounded-full border border-white/30"
-                          style={{ backgroundColor: spec.hexColor ?? undefined }}
-                          aria-hidden="true"
-                        />
-                        <span>Nhãn {labelId}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-2">
-                <div className="inline-flex items-center gap-1.5">
-                  <span className="text-[11px] font-medium text-slate-400">
-                    Cỡ cọ:
-                  </span>
-                  <div className="inline-flex h-7 items-center rounded-lg border border-slate-700/80 bg-slate-950/90 px-1 text-xs">
-                    <button
-                      type="button"
-                      aria-label="Giảm cỡ cọ"
-                      disabled={!canEditMask || brushRadius <= 1}
-                      title="Giảm bán kính cọ 1 pixel (Phím tắt: [)"
-                      onClick={() => setBrushRadius(brushRadius - 1)}
-                      className="inline-flex size-6 cursor-pointer items-center justify-center rounded text-slate-300 hover:bg-slate-800 hover:text-white disabled:opacity-40"
-                    >
-                      -
-                    </button>
-                    <span
-                      className="inline-flex min-w-[46px] items-center justify-center gap-1 px-1.5 font-mono text-[11px] font-semibold text-slate-200 tabular-nums"
-                      title="Bán kính cọ vẽ hiện tại (Giữ Alt + Lăn chuột để chỉnh nhanh)"
-                    >
-                      <span
-                        className="rounded-full border border-white/30"
-                        style={{
-                          width: `${Math.min(11, Math.max(5, brushRadius + 3))}px`,
-                          height: `${Math.min(11, Math.max(5, brushRadius + 3))}px`,
-                          backgroundColor:
-                            activeTool === 'erase'
-                              ? '#F87171'
-                              : (BRATS_LABELS[activeLabel].hexColor ?? '#F59E0B'),
-                        }}
-                        aria-hidden="true"
-                      />
-                      {brushRadius}px
-                    </span>
-                    <button
-                      type="button"
-                      aria-label="Tăng cỡ cọ"
-                      disabled={!canEditMask || brushRadius >= 20}
-                      title="Tăng bán kính cọ 1 pixel (Phím tắt: ])"
-                      onClick={() => setBrushRadius(brushRadius + 1)}
-                      className="inline-flex size-6 cursor-pointer items-center justify-center rounded text-slate-300 hover:bg-slate-800 hover:text-white disabled:opacity-40"
-                    >
-                      +
-                    </button>
-                  </div>
-                </div>
+              {/* Cụm Lưu phiên bản & Xuất (.nii.gz) */}
+              <div className="inline-flex items-center gap-1">
+                <button
+                  type="button"
+                  aria-label="Lưu phiên bản"
+                  disabled={!canEditMask || !isDirty || isSaving}
+                  title="Lưu phiên bản mask thủ công mới"
+                  onClick={() => {
+                    clearPendingSaveFollowUps();
+                    setSaveNoteModalOpen(true);
+                  }}
+                  className={cn(
+                    'inline-flex size-7 cursor-pointer items-center justify-center rounded-lg border transition-colors duration-150 disabled:cursor-not-allowed',
+                    darkSaveBtnClass,
+                  )}
+                >
+                  <Save className="size-3.5" aria-hidden="true" />
+                </button>
 
                 <button
                   type="button"
-                  aria-label="Ẩn/Hiện lớp phủ mask"
-                  aria-pressed={maskOpacityPercent > 0}
-                  title="Bật/tắt nhanh lớp phủ mask để đối chiếu nhu mô não gốc (Phím tắt: M)"
-                  onClick={handleToggleMaskOverlay}
+                  aria-label="Xuất (.nii.gz)"
+                  onClick={handleExportClick}
+                  title="Xuất tệp mask .nii.gz"
                   className={cn(
-                    'inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-lg border px-2.5 text-xs font-medium transition-colors',
-                    maskOpacityPercent > 0
-                      ? 'border-sky-500/50 bg-sky-950/80 text-sky-200 hover:bg-sky-900/70'
-                      : 'border-slate-700/80 bg-slate-950/90 text-slate-400 hover:bg-slate-800',
+                    'inline-flex size-7 cursor-pointer items-center justify-center rounded-lg border transition-colors duration-150',
+                    darkOutlineBtnClass,
                   )}
                 >
-                  {maskOpacityPercent > 0 ? (
-                    <Eye className="size-3.5 text-sky-400" aria-hidden="true" />
-                  ) : (
-                    <EyeOff className="size-3.5 text-slate-400" aria-hidden="true" />
-                  )}
-                  <span>Mask ({maskOpacityPercent}%)</span>
+                  <Download className="size-3.5" aria-hidden="true" />
                 </button>
               </div>
             </div>
@@ -2595,7 +2727,7 @@ export function ViewerWorkspacePage() {
           {effectiveLayoutMode === 'comparison' && (
             <div
               className={cn(
-                'grid gap-3',
+                'grid min-h-0 flex-1 gap-2',
                 isSinglePaneViewport || maximizedPaneId !== null
                   ? 'grid-cols-1'
                   : 'grid-cols-2',
@@ -2692,7 +2824,7 @@ export function ViewerWorkspacePage() {
           {effectiveLayoutMode === 'adjacent' && (
             <div
               className={cn(
-                'grid gap-3',
+                'grid min-h-0 flex-1 gap-2',
                 maximizedPaneId !== null ? 'grid-cols-1' : 'grid-cols-3',
               )}
             >
@@ -2762,10 +2894,53 @@ export function ViewerWorkspacePage() {
           {effectiveLayoutMode === 'three-plane' && (
             <div
               className={cn(
-                'grid gap-3',
+                'grid min-h-0 flex-1 gap-2',
                 maximizedPaneId !== null ? 'grid-cols-1' : 'grid-cols-3',
               )}
             >
+              {(maximizedPaneId === null ||
+                maximizedPaneId === 'pane-coronal-readonly') && (
+                <SliceCanvasPane
+                  testId="pane-coronal-readonly"
+                  title="Mặt phẳng Coronal (Chỉ đọc)"
+                  plane="coronal"
+                  sliceIndex={coronalSliceIndex}
+                  shape={activeShape}
+                  affine={activeAffine}
+                  mriBuffer={activeMriBuffer}
+                  maskBuffer={
+                    engineRef.current.isInitialized()
+                      ? engineRef.current.getWorkingBuffer()
+                      : null
+                  }
+                  showMask={true}
+                  editable={false}
+                  activeTool={activeTool}
+                  activeLabel={activeLabel}
+                  brushRadius={brushRadius}
+                  maskOpacityPercent={maskOpacityPercent}
+                  visibleLabels={visibleLabels}
+                  windowLevel={windowLevel}
+                  zoomLevel={zoomLevel}
+                  panOffset={panOffset}
+                  crosshairVoxel={crosshairVoxel}
+                  renderRevision={renderRevision}
+                  isFullscreen={isFullscreen}
+                  isMaximized={maximizedPaneId === 'pane-coronal-readonly'}
+                  onToggleMaximize={() =>
+                    toggleMaximizePane('pane-coronal-readonly')
+                  }
+                  onResetView={resetViewportTransform}
+                  onSelectCrosshair={(dx, dy) =>
+                    selectCrosshairOnPlane('coronal', coronalSliceIndex, dx, dy)
+                  }
+                  onWheelSlice={handleWheelSlice}
+                  onZoomDelta={handleZoomDelta}
+                  onPanDelta={handlePanDelta}
+                  onBrushRadiusDelta={handleBrushRadiusDelta}
+                />
+              )}
+
               {(maximizedPaneId === null ||
                 maximizedPaneId === 'pane-axial-editable') && (
                 <SliceCanvasPane
@@ -2803,49 +2978,6 @@ export function ViewerWorkspacePage() {
                   onStrokeMove={handleStrokeMove}
                   onStrokeEnd={handleStrokeEnd}
                   onSelectCrosshair={handleCrosshairSelect}
-                  onWheelSlice={handleWheelSlice}
-                  onZoomDelta={handleZoomDelta}
-                  onPanDelta={handlePanDelta}
-                  onBrushRadiusDelta={handleBrushRadiusDelta}
-                />
-              )}
-
-              {(maximizedPaneId === null ||
-                maximizedPaneId === 'pane-coronal-readonly') && (
-                <SliceCanvasPane
-                  testId="pane-coronal-readonly"
-                  title="Mặt phẳng Coronal (Chỉ đọc)"
-                  plane="coronal"
-                  sliceIndex={coronalSliceIndex}
-                  shape={activeShape}
-                  affine={activeAffine}
-                  mriBuffer={activeMriBuffer}
-                  maskBuffer={
-                    engineRef.current.isInitialized()
-                      ? engineRef.current.getWorkingBuffer()
-                      : null
-                  }
-                  showMask={true}
-                  editable={false}
-                  activeTool={activeTool}
-                  activeLabel={activeLabel}
-                  brushRadius={brushRadius}
-                  maskOpacityPercent={maskOpacityPercent}
-                  visibleLabels={visibleLabels}
-                  windowLevel={windowLevel}
-                  zoomLevel={zoomLevel}
-                  panOffset={panOffset}
-                  crosshairVoxel={crosshairVoxel}
-                  renderRevision={renderRevision}
-                  isFullscreen={isFullscreen}
-                  isMaximized={maximizedPaneId === 'pane-coronal-readonly'}
-                  onToggleMaximize={() =>
-                    toggleMaximizePane('pane-coronal-readonly')
-                  }
-                  onResetView={resetViewportTransform}
-                  onSelectCrosshair={(dx, dy) =>
-                    selectCrosshairOnPlane('coronal', coronalSliceIndex, dx, dy)
-                  }
                   onWheelSlice={handleWheelSlice}
                   onZoomDelta={handleZoomDelta}
                   onPanDelta={handlePanDelta}
@@ -2898,157 +3030,157 @@ export function ViewerWorkspacePage() {
             </div>
           )}
 
-          {/* Slice navigation controls (Interactive Slice Scrubber) */}
-          <div className="flex flex-col gap-2 rounded-lg border border-[var(--viewer-border)] bg-[var(--viewer-surface)] px-3 py-2 sm:px-3.5">
-            <div className="flex flex-wrap items-center gap-2.5">
+          {/* Slice navigation controls (Compact Single-Row Interactive Scrubber) */}
+          <div className="flex flex-wrap items-center gap-2 rounded-xl border border-[var(--viewer-border)] bg-[var(--viewer-surface)] px-2 py-1">
+            <div className="flex items-center gap-1">
               <IconButton
                 variant="dark"
                 size="sm"
+                className="size-7 min-h-[28px] min-w-[28px]"
                 aria-label="Lát trước"
                 disabled={currentSliceZeroBased <= 0}
                 onClick={() => navigateToSlice(currentSliceZeroBased - 1)}
                 icon={<ChevronLeft className="size-4" />}
               />
 
-              <div className="flex min-w-[180px] flex-1 flex-col gap-1">
-                <div className="flex items-center justify-between text-xs text-[var(--viewer-text-muted)]">
-                  <label htmlFor="viewer-slice-slider">
-                    Thanh trượt lát cắt (1–{totalSlices})
-                  </label>
-                  <span className="tabular-nums font-semibold text-[var(--viewer-text)]">
-                    Lát {oneBasedSlice} / {totalSlices}
-                  </span>
-                </div>
-                <input
-                  id="viewer-slice-slider"
-                  type="range"
-                  min={1}
-                  max={Math.max(1, totalSlices)}
-                  value={oneBasedSlice}
-                  onChange={(e) =>
-                    navigateToSlice(
-                      toZeroBasedSlice(Number(e.target.value), totalSlices),
-                    )
+              <button
+                type="button"
+                aria-label="Lát có mask trước"
+                title="Nhảy tới lát có mask trước đó"
+                disabled={prevMaskSlice === null}
+                onClick={() => {
+                  if (prevMaskSlice !== null) navigateToSlice(prevMaskSlice);
+                }}
+                className="inline-flex size-7 cursor-pointer items-center justify-center rounded-lg border border-[var(--viewer-border)] bg-[var(--viewer-bg)] text-[var(--viewer-text-secondary)] transition-colors duration-150 hover:bg-[var(--viewer-raised)] hover:text-[var(--viewer-text)] disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <SkipBack className="size-3.5" aria-hidden="true" />
+              </button>
+            </div>
+
+            <div className="flex min-w-[160px] flex-1 flex-col gap-1">
+              <label htmlFor="viewer-slice-slider" className="sr-only">
+                Thanh trượt lát cắt (1–{totalSlices})
+              </label>
+              <input
+                id="viewer-slice-slider"
+                type="range"
+                min={1}
+                max={Math.max(1, totalSlices)}
+                value={oneBasedSlice}
+                onChange={(e) =>
+                  navigateToSlice(
+                    toZeroBasedSlice(Number(e.target.value), totalSlices),
+                  )
+                }
+                className="h-3 w-full cursor-pointer accent-sky-500"
+              />
+              {/* Interactive Heatmap Scrubber: click trực tiếp để nhảy lát */}
+              <div
+                data-testid="slice-heatmap-scrubber"
+                aria-hidden="true"
+                title="Nhấp vào thanh chỉ báo để nhảy nhanh tới lát cắt tương ứng"
+                onClick={(e) => {
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  if (rect.width > 0) {
+                    const ratio = Math.min(
+                      1,
+                      Math.max(0, (e.clientX - rect.left) / rect.width),
+                    );
+                    const targetSlice = Math.round(
+                      ratio * Math.max(0, totalSlices - 1),
+                    );
+                    navigateToSlice(targetSlice);
                   }
-                  className="w-full accent-sky-500"
-                />
-                {/* Interactive Heatmap Scrubber: click trực tiếp để nhảy lát */}
-                <div
-                  data-testid="slice-heatmap-scrubber"
-                  aria-hidden="true"
-                  title="Nhấp vào thanh chỉ báo để nhảy nhanh tới lát cắt tương ứng"
-                  onClick={(e) => {
-                    const rect = e.currentTarget.getBoundingClientRect();
-                    if (rect.width > 0) {
-                      const ratio = Math.min(
-                        1,
-                        Math.max(0, (e.clientX - rect.left) / rect.width),
-                      );
-                      const targetSlice = Math.round(
-                        ratio * Math.max(0, totalSlices - 1),
-                      );
-                      navigateToSlice(targetSlice);
-                    }
-                  }}
-                  className="relative h-3 w-full cursor-pointer overflow-hidden rounded-md border border-slate-700/80 bg-slate-900/90"
-                >
-                  {occupiedSlices.map((s) => (
-                    <span
-                      key={`occ-${s}`}
-                      style={{
-                        left: `${(s / Math.max(1, totalSlices - 1)) * 100}%`,
-                      }}
-                      className="absolute top-0 h-full w-1 -translate-x-1/2 bg-emerald-400/80"
-                    />
-                  ))}
-                  {dirtySlices.map((s) => (
-                    <span
-                      key={`dirty-${s}`}
-                      style={{
-                        left: `${(s / Math.max(1, totalSlices - 1)) * 100}%`,
-                      }}
-                      className="absolute top-0 h-full w-1.5 -translate-x-1/2 bg-amber-400"
-                    />
-                  ))}
+                }}
+                className="relative h-2 w-full cursor-pointer overflow-hidden rounded border border-[var(--viewer-border)] bg-[var(--viewer-bg)]"
+              >
+                {occupiedSlices.map((s) => (
                   <span
+                    key={`occ-${s}`}
                     style={{
-                      left: `${(currentSliceZeroBased / Math.max(1, totalSlices - 1)) * 100}%`,
+                      left: `${(s / Math.max(1, totalSlices - 1)) * 100}%`,
                     }}
-                    className="absolute top-0 h-full w-1 -translate-x-1/2 bg-sky-400 shadow-[0_0_6px_rgba(56,189,248,0.9)]"
+                    className="absolute top-0 h-full w-1 -translate-x-1/2 bg-emerald-400/80"
                   />
-                </div>
+                ))}
+                {dirtySlices.map((s) => (
+                  <span
+                    key={`dirty-${s}`}
+                    style={{
+                      left: `${(s / Math.max(1, totalSlices - 1)) * 100}%`,
+                    }}
+                    className="absolute top-0 h-full w-1.5 -translate-x-1/2 bg-amber-400"
+                  />
+                ))}
+                <span
+                  style={{
+                    left: `${(currentSliceZeroBased / Math.max(1, totalSlices - 1)) * 100}%`,
+                  }}
+                  className="absolute top-0 h-full w-0.5 -translate-x-1/2 bg-[#EEF0F5]"
+                />
               </div>
+            </div>
+
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                aria-label="Lát có mask sau"
+                title="Nhảy tới lát có mask kế tiếp"
+                disabled={nextMaskSlice === null}
+                onClick={() => {
+                  if (nextMaskSlice !== null) navigateToSlice(nextMaskSlice);
+                }}
+                className="inline-flex size-7 cursor-pointer items-center justify-center rounded-lg border border-[var(--viewer-border)] bg-[var(--viewer-bg)] text-[var(--viewer-text-secondary)] transition-colors duration-150 hover:bg-[var(--viewer-raised)] hover:text-[var(--viewer-text)] disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <SkipForward className="size-3.5" aria-hidden="true" />
+              </button>
 
               <IconButton
                 variant="dark"
                 size="sm"
+                className="size-7 min-h-[28px] min-w-[28px]"
                 aria-label="Lát kế tiếp"
                 disabled={currentSliceZeroBased >= totalSlices - 1}
                 onClick={() => navigateToSlice(currentSliceZeroBased + 1)}
                 icon={<ChevronRight className="size-4" />}
               />
-
-              <div className="flex items-center gap-1.5">
-                <label
-                  htmlFor="viewer-slice-input"
-                  className="text-xs text-[var(--viewer-text-muted)]"
-                >
-                  Số lát:
-                </label>
-                <input
-                  id="viewer-slice-input"
-                  type="number"
-                  min={1}
-                  max={Math.max(1, totalSlices)}
-                  value={sliceInputText}
-                  onChange={(e) => setSliceInputText(e.target.value)}
-                  onBlur={commitSliceInput}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      commitSliceInput();
-                    }
-                  }}
-                  className="h-8 w-16 rounded-lg border border-slate-700 bg-slate-900/90 px-2 text-center text-xs font-semibold text-slate-100 tabular-nums focus:border-sky-400 focus:outline-none"
-                />
-              </div>
             </div>
 
-            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[var(--viewer-border)] pt-1.5 text-xs">
-              <div className="inline-flex items-center gap-1 rounded-lg border border-slate-700/80 bg-slate-950/90 p-0.5">
-                <button
-                  type="button"
-                  disabled={prevMaskSlice === null}
-                  onClick={() => {
-                    if (prevMaskSlice !== null) navigateToSlice(prevMaskSlice);
-                  }}
-                  className="inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-md px-2.5 text-xs font-medium text-slate-200 transition-colors hover:bg-slate-800 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  <SkipBack className="size-3.5" aria-hidden="true" />
-                  Lát có mask trước
-                </button>
-                <span aria-hidden="true" className="h-4 w-px bg-slate-800" />
-                <button
-                  type="button"
-                  disabled={nextMaskSlice === null}
-                  onClick={() => {
-                    if (nextMaskSlice !== null) navigateToSlice(nextMaskSlice);
-                  }}
-                  className="inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-md px-2.5 text-xs font-medium text-slate-200 transition-colors hover:bg-slate-800 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  Lát có mask sau
-                  <SkipForward className="size-3.5" aria-hidden="true" />
-                </button>
-              </div>
-              <div className="flex flex-wrap items-center gap-3 text-[11px] text-[var(--viewer-text-muted)]">
-                <span className="inline-flex items-center gap-1">
-                  <span className="size-2 rounded-full bg-emerald-400" /> Có mask
-                </span>
-                <span className="inline-flex items-center gap-1">
-                  <span className="size-2 rounded-full bg-amber-400" /> Chưa lưu
-                </span>
-                <span>Lăn chuột: ±1 lát (Shift+Lăn: ±5 lát)</span>
-                <span>Trống mask ≠ kết luận âm tính</span>
-              </div>
+            <div className="flex items-center gap-1.5 text-xs">
+              <label htmlFor="viewer-slice-input" className="sr-only">
+                Số lát:
+              </label>
+              <input
+                id="viewer-slice-input"
+                type="number"
+                title={`Nhập số lát cắt (1–${totalSlices})`}
+                min={1}
+                max={Math.max(1, totalSlices)}
+                value={sliceInputText}
+                onChange={(e) => setSliceInputText(e.target.value)}
+                onBlur={commitSliceInput}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    commitSliceInput();
+                  }
+                }}
+                className="h-7 w-12 rounded-lg border border-[var(--viewer-border)] bg-[var(--viewer-bg)] px-1 text-center text-xs font-medium text-[var(--viewer-text)] tabular-nums focus:border-sky-400 focus:outline-none"
+              />
+              <span className="tabular-nums text-[var(--viewer-text-muted)] whitespace-nowrap">
+                / {totalSlices}
+              </span>
+            </div>
+
+            <div className="hidden items-center gap-2.5 text-[11px] text-[var(--viewer-text-muted)] xl:flex">
+              <span className="inline-flex items-center gap-1">
+                <span className="size-2 rounded-full bg-emerald-400" /> Có mask
+              </span>
+              <span className="inline-flex items-center gap-1">
+                <span className="size-2 rounded-full bg-amber-400" /> Chưa lưu
+              </span>
+              <span title="Vùng chưa tô không đồng nghĩa âm tính về lâm sàng">
+                Trống mask ≠ âm tính
+              </span>
             </div>
           </div>
         </div>
@@ -3057,17 +3189,14 @@ export function ViewerWorkspacePage() {
         <aside
           aria-label="Bảng thông số nhãn và cọ vẽ"
           className={cn(
-            'flex flex-col gap-3 rounded-lg border border-[var(--viewer-border)] bg-[var(--viewer-surface)] p-3',
+            'flex flex-col gap-3 rounded-xl border border-[var(--viewer-border)] bg-[var(--viewer-surface)] p-3 lg:min-h-0 lg:overflow-y-auto',
             inspectorCollapsed && 'hidden',
           )}
         >
-          <div className="flex flex-col gap-1.5">
-            <h2 className="text-xs font-bold tracking-wide text-[var(--viewer-text)] uppercase">
-              Nhãn phân đoạn BraTS v1
+          <div className="flex flex-col gap-2">
+            <h2 className="text-xs font-semibold text-[var(--viewer-text)]">
+              Nhãn phân đoạn
             </h2>
-            <p className="text-[11px] text-[var(--viewer-text-muted)]">
-              Mỗi lớp luôn kèm mã số, tên nhãn và màu hiển thị.
-            </p>
             <ul className="flex flex-col gap-1.5">
               {BRATS_TUMOR_LABEL_IDS.map((labelId) => {
                 const spec = BRATS_LABELS[labelId];
@@ -3077,9 +3206,9 @@ export function ViewerWorkspacePage() {
                   <li
                     key={labelId}
                     className={cn(
-                      'flex items-center justify-between gap-2 rounded-lg border px-2.5 py-1.5 transition-colors',
+                      'flex items-center justify-between gap-2 rounded-lg border px-2.5 py-1.5 transition-colors duration-150',
                       isSelected
-                        ? 'border-sky-400/80 bg-sky-950/60'
+                        ? 'border-[var(--viewer-border-strong)] bg-[var(--viewer-raised)]'
                         : 'border-[var(--viewer-border)] bg-[var(--viewer-bg)]',
                     )}
                   >
@@ -3087,7 +3216,7 @@ export function ViewerWorkspacePage() {
                       type="button"
                       disabled={!canEditMask}
                       onClick={() => setActiveLabel(labelId)}
-                      className="flex min-h-[28px] flex-1 cursor-pointer items-center gap-2 text-left text-xs font-semibold text-[var(--viewer-text)] disabled:opacity-60"
+                      className="flex min-h-[28px] flex-1 cursor-pointer items-center gap-2 text-left text-xs font-medium text-[var(--viewer-text)] disabled:opacity-60"
                     >
                       <span
                         className="size-3.5 shrink-0 rounded-sm border border-white/25"
@@ -3099,15 +3228,29 @@ export function ViewerWorkspacePage() {
                     <button
                       type="button"
                       aria-pressed={isVisible}
+                      aria-label={
+                        isVisible
+                          ? `Ẩn lớp nhãn ${labelId}`
+                          : `Hiện lớp nhãn ${labelId}`
+                      }
+                      title={
+                        isVisible
+                          ? `Đang hiện — nhấp để ẩn ${spec.shortName}`
+                          : `Đang ẩn — nhấp để hiện ${spec.shortName}`
+                      }
                       onClick={() => toggleLabelVisibility(labelId)}
                       className={cn(
-                        'inline-flex h-7 cursor-pointer items-center rounded-md border px-2 text-[11px] font-medium transition-colors',
+                        'inline-flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-md border transition-colors duration-150',
                         isVisible
-                          ? 'border-slate-700 bg-slate-900 text-slate-200 hover:bg-slate-800'
-                          : 'border-slate-800 bg-slate-950 text-slate-500 hover:bg-slate-900',
+                          ? 'border-[var(--viewer-border)] bg-[var(--viewer-surface)] text-sky-400 hover:bg-[var(--viewer-raised)] hover:text-sky-300'
+                          : 'border-[var(--viewer-border)] bg-[var(--viewer-bg)] text-[var(--viewer-text-muted)] hover:bg-[var(--viewer-surface)] hover:text-[var(--viewer-text)]',
                       )}
                     >
-                      {isVisible ? 'Đang hiện' : 'Đang ẩn'}
+                      {isVisible ? (
+                        <Eye className="size-3.5" aria-hidden="true" />
+                      ) : (
+                        <EyeOff className="size-3.5" aria-hidden="true" />
+                      )}
                     </button>
                   </li>
                 );
@@ -3115,10 +3258,10 @@ export function ViewerWorkspacePage() {
             </ul>
           </div>
 
-          <div className="flex flex-col gap-1.5 border-t border-[var(--viewer-border)] pt-2.5">
+          <div className="flex flex-col gap-2 border-t border-[var(--viewer-border)] pt-3">
             <div className="flex items-center justify-between text-xs">
               <label htmlFor="viewer-opacity-slider">Độ mờ lớp phủ mask</label>
-              <span className="tabular-nums font-semibold">
+              <span className="tabular-nums font-medium">
                 {maskOpacityPercent}%
               </span>
             </div>
@@ -3131,17 +3274,17 @@ export function ViewerWorkspacePage() {
               onChange={(e) => setMaskOpacityPercent(Number(e.target.value))}
               className="w-full accent-sky-500"
             />
-            <div className="grid grid-cols-4 gap-1 pt-0.5">
+            <div className="grid grid-cols-4 gap-1">
               {([0, 40, 70, 100] as const).map((preset) => (
                 <button
                   key={`opacity-preset-${preset}`}
                   type="button"
                   onClick={() => setMaskOpacityPercent(preset)}
                   className={cn(
-                    'h-6 cursor-pointer rounded-md border font-mono text-[11px] font-medium transition-colors',
+                    'h-6 cursor-pointer rounded-md border font-mono text-[11px] font-medium tabular-nums transition-colors duration-150',
                     maskOpacityPercent === preset
-                      ? 'border-sky-400 bg-sky-950/80 text-sky-300'
-                      : 'border-slate-700/80 bg-slate-900/90 text-slate-300 hover:bg-slate-800',
+                      ? 'border-[var(--viewer-border-strong)] bg-[var(--viewer-raised)] text-[var(--viewer-text)]'
+                      : 'border-[var(--viewer-border)] bg-[var(--viewer-bg)] text-[var(--viewer-text-secondary)] hover:bg-[var(--viewer-raised)]',
                   )}
                 >
                   {preset}%
@@ -3150,10 +3293,10 @@ export function ViewerWorkspacePage() {
             </div>
           </div>
 
-          <div className="flex flex-col gap-1.5 border-t border-[var(--viewer-border)] pt-2.5">
+          <div className="flex flex-col gap-2 border-t border-[var(--viewer-border)] pt-3">
             <div className="flex items-center justify-between text-xs">
               <label htmlFor="viewer-brush-slider">Bán kính cọ (pixel)</label>
-              <span className="tabular-nums font-semibold">
+              <span className="tabular-nums font-medium">
                 {brushRadius} pixel
               </span>
             </div>
@@ -3167,7 +3310,7 @@ export function ViewerWorkspacePage() {
               onChange={(e) => setBrushRadius(Number(e.target.value))}
               className="w-full accent-sky-500 disabled:opacity-50"
             />
-            <div className="grid grid-cols-4 gap-1 pt-0.5">
+            <div className="grid grid-cols-4 gap-1">
               {([1, 3, 6, 12] as const).map((preset) => (
                 <button
                   key={`brush-preset-${preset}`}
@@ -3175,10 +3318,10 @@ export function ViewerWorkspacePage() {
                   disabled={!canEditMask}
                   onClick={() => setBrushRadius(preset)}
                   className={cn(
-                    'h-6 cursor-pointer rounded-md border font-mono text-[11px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-45',
+                    'h-6 cursor-pointer rounded-md border font-mono text-[11px] font-medium tabular-nums transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-45',
                     brushRadius === preset
-                      ? 'border-sky-400 bg-sky-950/80 text-sky-300'
-                      : 'border-slate-700/80 bg-slate-900/90 text-slate-300 hover:bg-slate-800',
+                      ? 'border-[var(--viewer-border-strong)] bg-[var(--viewer-raised)] text-[var(--viewer-text)]'
+                      : 'border-[var(--viewer-border)] bg-[var(--viewer-bg)] text-[var(--viewer-text-secondary)] hover:bg-[var(--viewer-raised)]',
                   )}
                 >
                   {preset}px
@@ -3188,19 +3331,19 @@ export function ViewerWorkspacePage() {
           </div>
 
           {/* Window / Level & Zoom */}
-          <div className="flex flex-col gap-1.5 border-t border-[var(--viewer-border)] pt-2.5 text-xs">
+          <div className="flex flex-col gap-2 border-t border-[var(--viewer-border)] pt-3 text-xs">
             <div className="flex items-center justify-between">
-              <span className="font-semibold">Tương phản &amp; Thu phóng</span>
+              <span className="font-medium text-[var(--viewer-text)]">Tương phản &amp; Thu phóng</span>
               <button
                 type="button"
                 onClick={resetViewportTransform}
-                className="inline-flex cursor-pointer items-center gap-1 text-[11px] text-sky-400 hover:underline"
+                className="inline-flex cursor-pointer items-center gap-1 text-xs text-sky-400 hover:underline"
               >
                 <RotateCcw className="size-3" /> Đặt lại
               </button>
             </div>
             <label className="flex items-center justify-between gap-2">
-              <span className="shrink-0">Zoom: {zoomLevel.toFixed(2)}x</span>
+              <span className="shrink-0 tabular-nums">Zoom: {zoomLevel.toFixed(2)}x</span>
               <input
                 aria-label="Mức thu phóng"
                 type="range"
@@ -3213,7 +3356,7 @@ export function ViewerWorkspacePage() {
               />
             </label>
             <label className="flex items-center justify-between gap-2">
-              <span className="shrink-0">Center: {windowLevel.center}</span>
+              <span className="shrink-0 tabular-nums">Center: {windowLevel.center}</span>
               <input
                 aria-label="Window Center"
                 type="range"
@@ -3233,17 +3376,17 @@ export function ViewerWorkspacePage() {
           </div>
 
           {/* Thống kê thể tích & Nguồn phiên bản */}
-          <div className="flex flex-col gap-1.5 border-t border-[var(--viewer-border)] pt-2.5 text-xs">
+          <div className="flex flex-col gap-2 border-t border-[var(--viewer-border)] pt-3 text-xs">
             <div className="flex items-center justify-between">
               <h3 className="font-semibold text-[var(--viewer-text)]">
                 Thống kê thể tích
               </h3>
               <span
                 className={cn(
-                  'rounded px-1.5 py-0.5 text-[10px] font-semibold',
+                  'rounded px-1.5 py-0.5 text-[11px] font-medium',
                   isDirty
-                    ? 'bg-amber-900/70 text-amber-200'
-                    : 'bg-slate-800 text-slate-300',
+                    ? 'bg-amber-900/60 text-amber-200'
+                    : 'bg-[var(--viewer-raised)] text-[var(--viewer-text-secondary)]',
                 )}
               >
                 {isDirty ? 'Chưa lưu (ước tính)' : 'Số liệu máy chủ'}
@@ -3264,7 +3407,7 @@ export function ViewerWorkspacePage() {
               return (
                 <div
                   aria-hidden="true"
-                  className="flex h-2 w-full overflow-hidden rounded-full bg-slate-800"
+                  className="flex h-2 w-full overflow-hidden rounded bg-[var(--viewer-bg)]"
                 >
                   {labelVolumes.map(({ lbl, mm3 }) => (
                     <div
@@ -3273,7 +3416,7 @@ export function ViewerWorkspacePage() {
                         width: `${totalVol > 0 ? (mm3 / totalVol) * 100 : 0}%`,
                         backgroundColor: BRATS_LABELS[lbl].hexColor ?? undefined,
                       }}
-                      className="h-full transition-all"
+                      className="h-full transition-opacity duration-150"
                     />
                   ))}
                 </div>
@@ -3287,10 +3430,10 @@ export function ViewerWorkspacePage() {
                   liveStats?.volumesMm3[lbl] ??
                   0);
               return (
-                <div key={lbl} className="flex items-center justify-between">
-                  <span className="inline-flex items-center gap-1.5 text-[var(--viewer-text-muted)]">
+                <div key={lbl} className="flex items-center justify-between gap-2">
+                  <span className="inline-flex shrink-0 items-center gap-1.5 text-[var(--viewer-text-secondary)]">
                     <span
-                      className="size-2 rounded-full"
+                      className="size-2 shrink-0 rounded-full"
                       style={{
                         backgroundColor: BRATS_LABELS[lbl].hexColor ?? undefined,
                       }}
@@ -3298,18 +3441,21 @@ export function ViewerWorkspacePage() {
                     />
                     {BRATS_LABELS[lbl].shortName}
                   </span>
-                  <span className="font-mono tabular-nums">
+                  <span className="whitespace-nowrap font-mono text-[11px] tabular-nums">
                     {formatVolumeSummary(mm3)}
                   </span>
                 </div>
               );
             })}
 
-            <div className="mt-1 flex items-center justify-between border-t border-[var(--viewer-border)] pt-2 font-semibold">
-              <span className="text-[var(--viewer-text)]">
-                Tổng phân đoạn (1+2+4)
+            <div className="mt-1 flex items-center justify-between gap-2 border-t border-[var(--viewer-border)] pt-2 font-medium">
+              <span
+                title="Tổng phân đoạn (1+2+4)"
+                className="shrink-0 text-[var(--viewer-text)]"
+              >
+                Tổng (1+2+4)
               </span>
-              <span className="font-mono tabular-nums text-[var(--viewer-text)]">
+              <span className="whitespace-nowrap font-mono text-[11px] tabular-nums text-[var(--viewer-text)]">
                 {formatVolumeSummary(
                   BRATS_TUMOR_LABEL_IDS.reduce((sum, lbl) => {
                     const v = isDirty
@@ -3323,7 +3469,7 @@ export function ViewerWorkspacePage() {
               </span>
             </div>
 
-            <div className="mt-1 grid grid-cols-3 gap-1.5 border-t border-[var(--viewer-border)] pt-2">
+            <div className="mt-1 flex flex-col gap-1 border-t border-[var(--viewer-border)] pt-2">
               {BRATS_COMPOSITE_GROUPS.map((grp) => {
                 const serverComposite = !isDirty
                   ? selectedVersion?.composite_volumes_mm3?.[grp.key]
@@ -3344,13 +3490,13 @@ export function ViewerWorkspacePage() {
                 return (
                   <div
                     key={grp.key}
-                    className="flex flex-col rounded border border-slate-800 bg-slate-900/80 p-1.5 text-[11px]"
+                    className="flex items-center justify-between gap-2 rounded border border-[var(--viewer-border)] bg-[var(--viewer-bg)] px-2.5 py-1.5 text-xs"
                     title={grp.note}
                   >
-                    <span className="font-semibold text-sky-300">
+                    <span className="shrink-0 font-medium text-sky-300">
                       {grp.key}
                     </span>
-                    <span className="mt-0.5 font-mono text-[10px] text-slate-200 tabular-nums">
+                    <span className="whitespace-nowrap font-mono text-[11px] text-[var(--viewer-text)] tabular-nums">
                       {formatVolumeSummary(mm3)}
                     </span>
                   </div>
@@ -3359,10 +3505,10 @@ export function ViewerWorkspacePage() {
             </div>
 
             {/* Thông tin provenance & coverage */}
-            <div className="mt-1 rounded border border-[var(--viewer-border)] bg-[var(--viewer-bg)] p-2 text-[11px] text-[var(--viewer-text-muted)]">
+            <div className="mt-1 rounded border border-[var(--viewer-border)] bg-[var(--viewer-bg)] p-2 text-xs text-[var(--viewer-text-muted)]">
               {selectedVersion ? (
                 <>
-                  <p className="font-semibold text-[var(--viewer-text)]">
+                  <p className="font-medium text-[var(--viewer-text)]">
                     v{selectedVersion.version_number} ·{' '}
                     {selectedVersion.source === 'ai'
                       ? `AI gốc · ${selectedVersion.model_version_id ?? 'Model AI'}`
@@ -3381,13 +3527,13 @@ export function ViewerWorkspacePage() {
                         'Vùng ngoài phạm vi crop của mô hình AI chưa được đánh giá tự động.'}
                     </p>
                   )}
-                  <div className="mt-2 grid grid-cols-2 gap-1.5">
+                  <div className="mt-2 grid grid-cols-2 gap-2">
                     <button
                       type="button"
                       onClick={handlePrintClick}
                       title="In tóm tắt hoặc lưu PDF qua trình duyệt cho phiên bản đã lưu đang chọn"
                       className={cn(
-                        'inline-flex h-8 cursor-pointer items-center justify-center gap-1.5 rounded-lg border px-2 text-xs font-medium transition-colors',
+                        'inline-flex h-8 cursor-pointer items-center justify-center gap-1.5 rounded-lg border px-2 text-xs font-medium transition-colors duration-150',
                         darkOutlineBtnClass,
                       )}
                     >
@@ -3401,7 +3547,7 @@ export function ViewerWorkspacePage() {
                       }}
                       title="Tải tệp JSON metadata kỹ thuật của phiên bản đang chọn"
                       className={cn(
-                        'inline-flex h-8 cursor-pointer items-center justify-center gap-1.5 rounded-lg border px-2 text-xs font-medium transition-colors',
+                        'inline-flex h-8 cursor-pointer items-center justify-center gap-1.5 rounded-lg border px-2 text-xs font-medium transition-colors duration-150',
                         darkOutlineBtnClass,
                       )}
                     >
@@ -3410,7 +3556,7 @@ export function ViewerWorkspacePage() {
                     </button>
                   </div>
                   {isDirty && (
-                    <p className="mt-1 text-[10px] text-amber-300">
+                    <p className="mt-1 text-[11px] text-amber-300">
                       Đang có chỉnh sửa chưa lưu: bản in chỉ xuất số liệu đã lưu của v{selectedVersion.version_number}.
                     </p>
                   )}
@@ -3524,6 +3670,42 @@ export function ViewerWorkspacePage() {
             triggerBrowserPrint();
           }}
         />
+      )}
+
+      {selectedVersion?.source === 'manual' && (
+        <ConfirmDialog
+          open={deleteMaskModalOpen}
+          onClose={() => {
+            if (!isDeletingMask) {
+              setDeleteMaskModalOpen(false);
+              setDeleteMaskError(null);
+            }
+          }}
+          onConfirm={handleConfirmDeleteSelectedMask}
+          title={`Xóa phiên bản mask thủ công v${selectedVersion.version_number}?`}
+          description={
+            isDirty
+              ? `Phiên bản thủ công v${selectedVersion.version_number} cùng các chỉnh sửa nháp chưa lưu trên phiên bản này sẽ bị xóa. Các phiên bản AI gốc và phiên bản khác vẫn được giữ nguyên.`
+              : `Phiên bản chỉnh tay v${selectedVersion.version_number} sẽ bị xóa khỏi ca chụp và thu hồi dung lượng tệp mask tương ứng. Các phiên bản AI gốc và phiên bản khác vẫn được giữ nguyên.`
+          }
+          confirmLabel="Xóa phiên bản"
+          variant="destructive"
+          isSubmitting={isDeletingMask}
+        >
+          {deleteMaskError && (
+            <Alert
+              variant="error"
+              title="Không thể xóa phiên bản mask"
+              description={deleteMaskError.message}
+            >
+              {deleteMaskError.requestId && (
+                <span className="sr-only">
+                  Mã tham chiếu: {deleteMaskError.requestId}
+                </span>
+              )}
+            </Alert>
+          )}
+        </ConfirmDialog>
       )}
 
       {savedPrintSummary && (

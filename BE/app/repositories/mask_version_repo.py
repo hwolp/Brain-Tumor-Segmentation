@@ -30,6 +30,7 @@ class MaskVersionRepository:
             .outerjoin(User, User.id == MaskVersion.created_by)
             .where(
                 MaskVersion.id == mask_version_id,
+                MaskVersion.deleted_at.is_(None),
                 Case.owner_id == owner_id,
                 Case.deleting_at.is_(None),
                 Case.deleted_at.is_(None),
@@ -60,7 +61,19 @@ class MaskVersionRepository:
             select(MaskVersion).where(
                 MaskVersion.id == mask_version_id,
                 MaskVersion.case_id == case_id,
+                MaskVersion.deleted_at.is_(None),
             )
+        )
+
+    def get_latest_active_for_case(self, case_id: uuid.UUID) -> MaskVersion | None:
+        return self.db.scalar(
+            select(MaskVersion)
+            .where(
+                MaskVersion.case_id == case_id,
+                MaskVersion.deleted_at.is_(None),
+            )
+            .order_by(MaskVersion.version_number.desc())
+            .limit(1)
         )
 
     def list_for_case(
@@ -72,19 +85,52 @@ class MaskVersionRepository:
     ) -> tuple[list[tuple[MaskVersion, str | None]], int]:
         total = int(
             self.db.scalar(
-                select(func.count(MaskVersion.id)).where(MaskVersion.case_id == case_id)
+                select(func.count(MaskVersion.id)).where(
+                    MaskVersion.case_id == case_id,
+                    MaskVersion.deleted_at.is_(None),
+                )
             )
             or 0
         )
         rows = self.db.execute(
             select(MaskVersion, User.display_name)
             .outerjoin(User, User.id == MaskVersion.created_by)
-            .where(MaskVersion.case_id == case_id)
+            .where(
+                MaskVersion.case_id == case_id,
+                MaskVersion.deleted_at.is_(None),
+            )
             .order_by(MaskVersion.version_number.desc())
             .offset((page - 1) * page_size)
             .limit(page_size)
         ).all()
         return [(row[0], row[1]) for row in rows], total
+
+    def list_active_referenced_file_ids(
+        self,
+        file_ids: list[uuid.UUID],
+        *,
+        exclude_mask_version_id: uuid.UUID,
+    ) -> set[uuid.UUID]:
+        if not file_ids:
+            return set()
+        rows = self.db.execute(
+            select(MaskVersion.file_id, MaskVersion.coverage_file_id).where(
+                MaskVersion.id != exclude_mask_version_id,
+                MaskVersion.deleted_at.is_(None),
+                or_(
+                    MaskVersion.file_id.in_(file_ids),
+                    MaskVersion.coverage_file_id.in_(file_ids),
+                ),
+            )
+        ).all()
+        referenced: set[uuid.UUID] = set()
+        candidate_set = set(file_ids)
+        for fid, cov_id in rows:
+            if fid in candidate_set:
+                referenced.add(fid)
+            if cov_id is not None and cov_id in candidate_set:
+                referenced.add(cov_id)
+        return referenced
 
     def get_next_version_number(self, case_id: uuid.UUID) -> int:
         current_max = self.db.scalar(

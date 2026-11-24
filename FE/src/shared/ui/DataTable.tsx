@@ -67,20 +67,20 @@ export function DataTable<T>({
   return (
     <div
       className={cn(
-        'w-full overflow-x-auto rounded-lg border border-[var(--border-default)] bg-[var(--bg-surface)]',
+        'refract-panel w-full overflow-x-auto',
         className,
       )}
     >
       <table className="w-full min-w-[640px] border-collapse text-left text-sm">
         {caption && <caption className="sr-only">{caption}</caption>}
-        <thead className="border-b border-[var(--border-default)] bg-[var(--bg-muted)]">
+        <thead className="border-b border-[var(--color-rule)] bg-[var(--color-paper-2)]/75">
           <tr>
             {columns.map((col) => (
               <th
                 key={col.key}
                 scope="col"
                 className={cn(
-                  'whitespace-nowrap px-3 py-2.5 sm:px-4 sm:py-3 text-xs font-semibold uppercase tracking-wide text-[var(--text-secondary)]',
+                  'whitespace-nowrap px-4 py-3 text-xs font-medium text-[var(--color-ink-2)]',
                   col.align === 'right' && 'text-right',
                   col.align === 'center' && 'text-center',
                   col.headerClassName,
@@ -91,21 +91,21 @@ export function DataTable<T>({
             ))}
           </tr>
         </thead>
-        <tbody className="divide-y divide-[var(--border-default)]">
+        <tbody className="divide-y divide-[var(--color-rule-2)]">
           {data.map((row) => (
             <tr
               key={rowKey(row)}
               onClick={onRowClick ? () => onRowClick(row) : undefined}
               className={cn(
                 'transition-colors duration-150',
-                onRowClick && 'cursor-pointer hover:bg-slate-50',
+                onRowClick && 'cursor-pointer hover:bg-[var(--color-accent-soft)]/50',
               )}
             >
               {columns.map((col) => (
                 <td
                   key={col.key}
                   className={cn(
-                    'px-3 py-2.5 sm:px-4 sm:py-3 align-middle text-[var(--text-primary)]',
+                    'px-4 py-3 align-middle text-[var(--text-primary)]',
                     col.align === 'right' && 'text-right tabular-nums',
                     col.align === 'center' && 'text-center',
                     col.cellClassName,

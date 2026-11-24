@@ -197,7 +197,7 @@ export function PatientsListPage() {
       header: 'Số ca chụp',
       align: 'center',
       cell: (row) => (
-        <span className="inline-flex min-w-[28px] items-center justify-center rounded-full border border-[var(--border-default)] bg-[var(--bg-muted)] px-2.5 py-0.5 text-xs font-semibold tabular-nums text-[var(--text-primary)]">
+        <span className="font-mono text-sm font-medium tabular-nums text-[var(--text-primary)]">
           {row.case_count ?? 0}
         </span>
       ),
@@ -250,7 +250,7 @@ export function PatientsListPage() {
   return (
     <div className="flex flex-col gap-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-bold text-[var(--text-primary)]">
+        <h1 className="font-display text-[1.75rem] leading-[1.08] font-normal text-[var(--color-ink)]">
           Danh sách bệnh nhân
         </h1>
 
@@ -264,13 +264,13 @@ export function PatientsListPage() {
         </Button>
       </div>
 
-      <div className="flex flex-col items-stretch gap-3 rounded-lg border border-[var(--border-default)] bg-[var(--bg-surface)] p-3.5 sm:flex-row sm:flex-wrap sm:items-center sm:p-4">
+      <div className="refract-panel flex flex-col items-stretch gap-3 p-4 sm:flex-row sm:flex-wrap sm:items-center">
         <div className="relative min-w-0 flex-1 sm:max-w-md sm:min-w-[240px]">
           <label htmlFor="patient-search" className="sr-only">
             Tìm theo mã hoặc họ tên bệnh nhân
           </label>
           <Search
-            className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-[var(--text-secondary)]"
+            className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-[var(--text-muted)]"
             aria-hidden="true"
           />
           <Input
@@ -278,7 +278,7 @@ export function PatientsListPage() {
             type="search"
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
-            placeholder="Tìm theo mã bệnh nhân hoặc họ tên..."
+            placeholder="Tìm mã hoặc họ tên bệnh nhân"
             className="pl-9"
           />
         </div>

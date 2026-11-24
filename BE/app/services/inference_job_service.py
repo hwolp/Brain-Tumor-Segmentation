@@ -11,7 +11,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, BinaryIO
 
-from sqlalchemy import func, select
+from sqlalchemy import String, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -30,6 +30,7 @@ from app.models.mask_version import MaskVersion
 from app.models.patient import Patient
 from app.models.stored_file import StoredFile
 from app.models.system_setting import SystemSetting
+from app.models.user import User
 from app.models.volume import Volume
 from app.repositories.audit_repo import AuditRepository
 from app.repositories.case_repo import CaseRepository
@@ -39,6 +40,9 @@ from app.repositories.system_setting_repo import SystemSettingRepository
 from app.repositories.volume_repo import VolumeRepository
 from app.schemas.common import PaginatedResponse
 from app.schemas.jobs import (
+    AdminJobAttemptOut,
+    AdminJobDetailOut,
+    AdminJobOut,
     InferenceJobOut,
     WorkerClaimOut,
     WorkerInputFile,
@@ -80,6 +84,10 @@ def _raise(status: int, code: str, message: str) -> None:
 
 def _hash_token(raw: str) -> str:
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+def _escape_like(value: str) -> str:
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 
 def _read_manifest(settings: Settings) -> tuple[dict[str, Any], Path]:
@@ -155,7 +163,7 @@ def _get_job_out(job: InferenceJob) -> InferenceJobOut:
     return InferenceJobOut.model_validate(job)
 
 
-class JobService:
+class InferenceJobService:
     def __init__(self, db: Session, storage: LocalStorageAdapter, settings: Settings) -> None:
         self.db = db
         self.storage = storage
@@ -1167,6 +1175,240 @@ class JobService:
         )
         self.db.commit()
         return _get_job_out(job)
+
+    def list_jobs(
+        self, *, q: str | None, state: str | None, page: int, page_size: int
+    ) -> PaginatedResponse[AdminJobOut]:
+        """List inference jobs across all doctors for technical operations."""
+        conditions = []
+        if state:
+            conditions.append(InferenceJob.state == state)
+        search = (q or "").strip()
+        if search:
+            pattern = f"%{_escape_like(search)}%"
+            conditions.append(
+                or_(
+                    InferenceJob.id.cast(String).ilike(pattern, escape="\\"),
+                    User.username.ilike(pattern, escape="\\"),
+                )
+            )
+        query = (
+            select(InferenceJob, User.username, ModelVersion.version)
+            .join(User, User.id == InferenceJob.doctor_id)
+            .join(ModelVersion, ModelVersion.id == InferenceJob.model_version_id)
+            .where(*conditions)
+        )
+        count_query = (
+            select(func.count(InferenceJob.id))
+            .join(User, User.id == InferenceJob.doctor_id)
+            .join(ModelVersion, ModelVersion.id == InferenceJob.model_version_id)
+            .where(*conditions)
+        )
+        total = int(self.db.scalar(count_query) or 0)
+        rows = self.db.execute(
+            query.order_by(InferenceJob.created_at.desc(), InferenceJob.id.desc())
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+        ).all()
+        items = [
+            AdminJobOut(
+                id=job.id,
+                case_id=job.case_id,
+                doctor_username=username,
+                model_version=model_version,
+                state=job.state,
+                stage=job.stage,
+                attempt_count=job.attempt_count,
+                error_code=job.error_code,
+                created_at=job.created_at,
+                started_at=job.started_at,
+                finished_at=job.finished_at,
+            )
+            for job, username, model_version in rows
+        ]
+        return PaginatedResponse[AdminJobOut](
+            items=items, total=total, page=page, page_size=page_size
+        )
+
+    def get_job_detail(self, job_id: uuid.UUID) -> AdminJobDetailOut:
+        """Return technical details and attempt history for an inference job."""
+        row = self.db.execute(
+            select(InferenceJob, User.username, ModelVersion.version)
+            .join(User, User.id == InferenceJob.doctor_id)
+            .join(ModelVersion, ModelVersion.id == InferenceJob.model_version_id)
+            .where(InferenceJob.id == job_id)
+        ).first()
+        if row is None:
+            raise AppError(
+                status_code=404, code="job_not_found", message="Không tìm thấy tác vụ AI."
+            )
+        job, username, model_version = row
+        attempts = self.db.scalars(
+            select(JobAttempt)
+            .where(JobAttempt.job_id == job_id)
+            .order_by(JobAttempt.attempt_number)
+        ).all()
+        return AdminJobDetailOut(
+            id=job.id,
+            case_id=job.case_id,
+            doctor_username=username,
+            model_version=model_version,
+            state=job.state,
+            stage=job.stage,
+            attempt_count=job.attempt_count,
+            error_code=job.error_code,
+            created_at=job.created_at,
+            started_at=job.started_at,
+            finished_at=job.finished_at,
+            attempts=[AdminJobAttemptOut.model_validate(item) for item in attempts],
+        )
+
+    def retry_failed_job(
+        self, *, job_id: uuid.UUID, admin_id: uuid.UUID, request_id: str, ip_address: str
+    ) -> AdminJobOut:
+        """Enqueue a new job for a failed inference job while preserving lock ordering."""
+        old_probe = self.db.get(InferenceJob, job_id)
+        if old_probe is None:
+            raise AppError(
+                status_code=404, code="job_not_found", message="Không tìm thấy tác vụ AI."
+            )
+        if old_probe.state != "failed":
+            raise AppError(
+                status_code=409,
+                code="job_not_retryable",
+                message="Chỉ có thể gửi lại job thất bại.",
+            )
+        if not self._accepting_jobs():
+            raise AppError(
+                status_code=503,
+                code="not_accepting_jobs",
+                message="Hệ thống đang tạm dừng nhận tác vụ AI mới.",
+            )
+
+        # Lock Case FIRST to match InferenceJobService.create_job lock ordering
+        case = self.cases.get_active_for_owner_for_update(old_probe.case_id, old_probe.doctor_id)
+        owner = self.db.scalar(
+            select(User)
+            .where(User.id == old_probe.doctor_id)
+            .execution_options(populate_existing=True)
+        )
+        if owner is None or not owner.is_active:
+            raise AppError(
+                status_code=409,
+                code="retry_owner_inactive",
+                message="Tài khoản bác sĩ sở hữu ca chụp hiện không còn hoạt động.",
+            )
+        if case is None:
+            raise AppError(
+                status_code=409,
+                code="retry_case_deleted",
+                message="Ca chụp không còn tồn tại hoặc đã bị xóa.",
+            )
+
+        old = self.db.scalar(
+            select(InferenceJob)
+            .where(InferenceJob.id == job_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        if old is None:
+            raise AppError(
+                status_code=404, code="job_not_found", message="Không tìm thấy tác vụ AI."
+            )
+        if old.state != "failed":
+            raise AppError(
+                status_code=409,
+                code="job_not_retryable",
+                message="Chỉ có thể gửi lại job thất bại.",
+            )
+
+        intake_setting = self.db.scalar(
+            select(SystemSetting)
+            .where(SystemSetting.key == "admin_settings")
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        if intake_setting is not None and not bool(
+            intake_setting.value_json.get("accepting_jobs", True)
+        ):
+            raise AppError(
+                status_code=503,
+                code="not_accepting_jobs",
+                message="Hệ thống đang tạm dừng nhận tác vụ AI mới.",
+            )
+        volumes = self.volumes.list_active_for_case(case.id)
+        _, can_run, _ = compute_case_inference_status(
+            volumes, manifest_path=_manifest_path(self.settings)
+        )
+        if (
+            not can_run
+            or case.reference_volume_id is None
+            or not any(v.id == case.reference_volume_id for v in volumes)
+            or any(
+                v.validation_status != "valid"
+                for v in volumes
+                if v.modality in {"flair", "t1ce"}
+            )
+        ):
+            raise AppError(
+                status_code=409,
+                code="case_not_ready",
+                message="Ca chụp không còn đủ đầu vào hợp lệ.",
+            )
+        if self.cases.has_active_job(case.id):
+            raise AppError(
+                status_code=409,
+                code="active_job_conflict",
+                message="Ca chụp đã có job đang hoạt động.",
+            )
+        model = sync_active_model(self.db, self.settings)
+        try:
+            job = InferenceJob(
+                case_id=case.id,
+                doctor_id=owner.id,
+                model_version_id=model.id,
+                state="queued",
+                stage="queued",
+                attempt_count=0,
+                auto_retry_count=0,
+                max_auto_retries=1,
+            )
+            self.db.add(job)
+            self.db.flush()
+            case.inputs_locked_at = case.inputs_locked_at or datetime.now(UTC)
+            self.audits.record_event(
+                actor_type="user",
+                actor_id=admin_id,
+                action="admin.job_retry",
+                resource_type="inference_job",
+                resource_id=str(job.id),
+                outcome="success",
+                request_id=request_id,
+                ip_address=ip_address,
+                safe_diff={"previous_job_id": str(old.id), "case_id": str(case.id)},
+            )
+            out = AdminJobOut(
+                id=job.id,
+                case_id=job.case_id,
+                doctor_username=owner.username,
+                model_version=model.version,
+                state=job.state,
+                stage=job.stage,
+                attempt_count=job.attempt_count,
+                error_code=job.error_code,
+                created_at=job.created_at,
+                started_at=job.started_at,
+                finished_at=job.finished_at,
+            )
+            self.db.commit()
+        except IntegrityError as exc:
+            self.db.rollback()
+            raise AppError(
+                status_code=409,
+                code="active_job_conflict",
+                message="Ca chụp đã có job đang hoạt động.",
+            ) from exc
+        return out
 
 
 def _validate_worker_result_metadata(

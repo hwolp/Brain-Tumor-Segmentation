@@ -87,6 +87,37 @@ function getDisplayCoordsFromPointer(
   };
 }
 
+function isSpacePanBlockedTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  const tag = target.tagName.toLowerCase();
+  if (
+    tag === 'input' ||
+    tag === 'textarea' ||
+    tag === 'select' ||
+    tag === 'button' ||
+    tag === 'a'
+  ) {
+    return true;
+  }
+  if (target.isContentEditable) return true;
+  const role = target.getAttribute('role');
+  if (role === 'combobox' || role === 'dialog' || role === 'button') return true;
+  return Boolean(target.closest('[role="dialog"]'));
+}
+
+const PAN_DRAG_THRESHOLD_PX = 3;
+
+interface PendingViewPress {
+  pointerId: number;
+  startX: number;
+  startY: number;
+  lastX: number;
+  lastY: number;
+  displayX: number;
+  displayY: number;
+  hasDragged: boolean;
+}
+
 export function SliceCanvasPane({
   title,
   testId,
@@ -126,11 +157,19 @@ export function SliceCanvasPane({
   const activePointerIdRef = React.useRef<number | null>(null);
   const isDrawingRef = React.useRef(false);
   const isPanningRef = React.useRef(false);
+  const pendingViewPressRef = React.useRef<PendingViewPress | null>(null);
   const lastPanClientRef = React.useRef<{ x: number; y: number } | null>(null);
+  const isSpacePanHeldRef = React.useRef(false);
   const handledWheelEventsRef = React.useRef<WeakSet<Event>>(new WeakSet());
   const onStrokeEndRef = React.useRef(onStrokeEnd);
   onStrokeEndRef.current = onStrokeEnd;
 
+  const [isDraggingPan, setIsDraggingPan] = React.useState(false);
+  const [isSpacePanHeld, setIsSpacePanHeld] = React.useState(false);
+  const [viewportSize, setViewportSize] = React.useState<{
+    width: number;
+    height: number;
+  } | null>(null);
   const [hoverPoint, setHoverPoint] = React.useState<{
     displayX: number;
     displayY: number;
@@ -141,13 +180,54 @@ export function SliceCanvasPane({
     [plane, affine, shape],
   );
 
+  React.useEffect(() => {
+    const viewport = viewportRef.current;
+    if (!viewport || sliceIndex === null) {
+      setViewportSize(null);
+      return;
+    }
+
+    const updateSize = (width: number, height: number) => {
+      if (!(width > 0 && height > 0)) return;
+      const roundedW = Math.floor(width);
+      const roundedH = Math.floor(height);
+      setViewportSize((prev) =>
+        prev && prev.width === roundedW && prev.height === roundedH
+          ? prev
+          : { width: roundedW, height: roundedH },
+      );
+    };
+
+    const rect = viewport.getBoundingClientRect();
+    updateSize(rect.width, rect.height);
+
+    if (typeof ResizeObserver === 'undefined') {
+      return;
+    }
+
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (!entry) return;
+      updateSize(entry.contentRect.width, entry.contentRect.height);
+    });
+    observer.observe(viewport);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [sliceIndex]);
+
   const cancelActivePointerInteraction = React.useCallback(() => {
     const ptrId = activePointerIdRef.current;
     activePointerIdRef.current = null;
+    pendingViewPressRef.current = null;
     if (isPanningRef.current) {
       isPanningRef.current = false;
       lastPanClientRef.current = null;
     }
+    setIsDraggingPan(false);
+    isSpacePanHeldRef.current = false;
+    setIsSpacePanHeld(false);
     if (isDrawingRef.current) {
       isDrawingRef.current = false;
       onStrokeEndRef.current?.();
@@ -160,11 +240,39 @@ export function SliceCanvasPane({
         // Ignore if pointer capture already released
       }
     }
+    const viewport = viewportRef.current;
+    if (viewport && ptrId !== null && viewport.hasPointerCapture?.(ptrId)) {
+      try {
+        viewport.releasePointerCapture(ptrId);
+      } catch {
+        // Ignore if pointer capture already released
+      }
+    }
   }, []);
 
   React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.code !== 'Space' && e.key !== ' ') return;
+      if (isSpacePanBlockedTarget(e.target)) return;
+      e.preventDefault();
+      if (!isSpacePanHeldRef.current) {
+        isSpacePanHeldRef.current = true;
+        setIsSpacePanHeld(true);
+      }
+    };
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.code !== 'Space' && e.key !== ' ') return;
+      if (isSpacePanHeldRef.current) {
+        isSpacePanHeldRef.current = false;
+        setIsSpacePanHeld(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
     window.addEventListener('blur', cancelActivePointerInteraction);
     return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
       window.removeEventListener('blur', cancelActivePointerInteraction);
       cancelActivePointerInteraction();
     };
@@ -333,6 +441,7 @@ export function SliceCanvasPane({
   ]);
 
   const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    e.stopPropagation();
     if (sliceIndex === null || !mriBuffer) return;
 
     const coords = getDisplayCoordsFromPointer(e, axes.colDim, axes.rowDim);
@@ -346,17 +455,26 @@ export function SliceCanvasPane({
     ) {
       return;
     }
-    if (isDrawingRef.current || isPanningRef.current) {
+    if (
+      isDrawingRef.current ||
+      isPanningRef.current ||
+      pendingViewPressRef.current !== null
+    ) {
       return;
     }
 
     const button = typeof e.button === 'number' ? e.button : 0;
+    const clientX =
+      typeof e.clientX === 'number' && Number.isFinite(e.clientX) ? e.clientX : 0;
+    const clientY =
+      typeof e.clientY === 'number' && Number.isFinite(e.clientY) ? e.clientY : 0;
 
-    // Middle-click hoặc giữ Shift khi kéo để pan
-    if (button === 1 || (e.shiftKey && button === 0)) {
+    // Middle-click, hoặc giữ Shift / Space khi kéo để pan ngay
+    if (button === 1 || (button === 0 && (e.shiftKey || isSpacePanHeldRef.current))) {
       activePointerIdRef.current = pointerId;
       isPanningRef.current = true;
-      lastPanClientRef.current = { x: e.clientX, y: e.clientY };
+      setIsDraggingPan(true);
+      lastPanClientRef.current = { x: clientX, y: clientY };
       try {
         e.currentTarget.setPointerCapture?.(pointerId);
       } catch {
@@ -379,11 +497,28 @@ export function SliceCanvasPane({
       }
       onStrokeStart?.(displayX, displayY);
     } else {
-      onSelectCrosshair?.(displayX, displayY);
+      // Chế độ Xem lát / chỉ đọc: nhấn-thả tại chỗ (< 3px) để đặt crosshair, nhấn-giữ kéo để pan ảnh
+      activePointerIdRef.current = pointerId;
+      pendingViewPressRef.current = {
+        pointerId,
+        startX: clientX,
+        startY: clientY,
+        lastX: clientX,
+        lastY: clientY,
+        displayX,
+        displayY,
+        hasDragged: false,
+      };
+      try {
+        e.currentTarget.setPointerCapture?.(pointerId);
+      } catch {
+        // Ignore if unsupported
+      }
     }
   };
 
   const handlePointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    e.stopPropagation();
     if (sliceIndex !== null && mriBuffer) {
       const hoverCoords = getDisplayCoordsFromPointer(
         e,
@@ -407,10 +542,42 @@ export function SliceCanvasPane({
       return;
     }
 
+    const clientX =
+      typeof e.clientX === 'number' && Number.isFinite(e.clientX) ? e.clientX : 0;
+    const clientY =
+      typeof e.clientY === 'number' && Number.isFinite(e.clientY) ? e.clientY : 0;
+
+    const pendingPress = pendingViewPressRef.current;
+    if (pendingPress && pendingPress.pointerId === pointerId) {
+      if (!pendingPress.hasDragged) {
+        if (
+          Math.hypot(clientX - pendingPress.startX, clientY - pendingPress.startY) <
+          PAN_DRAG_THRESHOLD_PX
+        ) {
+          return;
+        }
+        pendingPress.hasDragged = true;
+        isPanningRef.current = true;
+        setIsDraggingPan(true);
+        const dx = clientX - pendingPress.startX;
+        const dy = clientY - pendingPress.startY;
+        pendingPress.lastX = clientX;
+        pendingPress.lastY = clientY;
+        onPanDelta?.(dx, dy);
+        return;
+      }
+      const dx = clientX - pendingPress.lastX;
+      const dy = clientY - pendingPress.lastY;
+      pendingPress.lastX = clientX;
+      pendingPress.lastY = clientY;
+      onPanDelta?.(dx, dy);
+      return;
+    }
+
     if (isPanningRef.current && lastPanClientRef.current) {
-      const dx = e.clientX - lastPanClientRef.current.x;
-      const dy = e.clientY - lastPanClientRef.current.y;
-      lastPanClientRef.current = { x: e.clientX, y: e.clientY };
+      const dx = clientX - lastPanClientRef.current.x;
+      const dy = clientY - lastPanClientRef.current.y;
+      lastPanClientRef.current = { x: clientX, y: clientY };
       onPanDelta?.(dx, dy);
       return;
     }
@@ -430,7 +597,12 @@ export function SliceCanvasPane({
     }
   };
 
-  const finishPointerAction = (e?: React.PointerEvent<HTMLCanvasElement>) => {
+  const finishPointerAction = (
+    e?: React.PointerEvent<HTMLCanvasElement | HTMLDivElement>,
+  ) => {
+    if (e && e.currentTarget === canvasRef.current) {
+      e.stopPropagation();
+    }
     if (e) {
       const pointerId = typeof e.pointerId === 'number' ? e.pointerId : 1;
       if (
@@ -446,26 +618,96 @@ export function SliceCanvasPane({
         : activePointerIdRef.current;
     activePointerIdRef.current = null;
 
+    const pendingPress = pendingViewPressRef.current;
+    pendingViewPressRef.current = null;
+
     if (isPanningRef.current) {
       isPanningRef.current = false;
       lastPanClientRef.current = null;
     }
+    setIsDraggingPan(false);
+
     if (isDrawingRef.current) {
       isDrawingRef.current = false;
       onStrokeEndRef.current?.();
     }
-    const targetCanvas = e?.currentTarget ?? canvasRef.current;
+
+    if (pendingPress && !pendingPress.hasDragged && e?.type === 'pointerup') {
+      onSelectCrosshair?.(pendingPress.displayX, pendingPress.displayY);
+    }
+
+    const targetEl = e?.currentTarget ?? canvasRef.current;
     if (
-      targetCanvas &&
+      targetEl &&
       endedPointerId !== null &&
-      targetCanvas.hasPointerCapture?.(endedPointerId)
+      targetEl.hasPointerCapture?.(endedPointerId)
     ) {
       try {
-        targetCanvas.releasePointerCapture(endedPointerId);
+        targetEl.releasePointerCapture(endedPointerId);
       } catch {
         // Ignore if pointer capture already released
       }
     }
+  };
+
+  const handleViewportPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (sliceIndex === null || !mriBuffer) return;
+    if (e.target === canvasRef.current) return;
+    if (e.target instanceof Element && e.target.closest('button')) return;
+
+    const button = typeof e.button === 'number' ? e.button : 0;
+    if (button !== 0 && button !== 1) return;
+
+    const pointerId = typeof e.pointerId === 'number' ? e.pointerId : 1;
+    if (
+      activePointerIdRef.current !== null &&
+      activePointerIdRef.current !== pointerId
+    ) {
+      return;
+    }
+
+    const clientX =
+      typeof e.clientX === 'number' && Number.isFinite(e.clientX) ? e.clientX : 0;
+    const clientY =
+      typeof e.clientY === 'number' && Number.isFinite(e.clientY) ? e.clientY : 0;
+
+    activePointerIdRef.current = pointerId;
+    isPanningRef.current = true;
+    setIsDraggingPan(true);
+    lastPanClientRef.current = { x: clientX, y: clientY };
+    try {
+      e.currentTarget.setPointerCapture?.(pointerId);
+    } catch {
+      // Ignore if unsupported
+    }
+  };
+
+  const handleViewportPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.target === canvasRef.current) return;
+    const pointerId = typeof e.pointerId === 'number' ? e.pointerId : 1;
+    if (
+      activePointerIdRef.current !== null &&
+      pointerId !== activePointerIdRef.current
+    ) {
+      return;
+    }
+    if (isPanningRef.current && lastPanClientRef.current) {
+      const clientX =
+        typeof e.clientX === 'number' && Number.isFinite(e.clientX) ? e.clientX : 0;
+      const clientY =
+        typeof e.clientY === 'number' && Number.isFinite(e.clientY) ? e.clientY : 0;
+      const dx = clientX - lastPanClientRef.current.x;
+      const dy = clientY - lastPanClientRef.current.y;
+      lastPanClientRef.current = { x: clientX, y: clientY };
+      onPanDelta?.(dx, dy);
+    }
+  };
+
+  const finishViewportPointerAction = (
+    e: React.PointerEvent<HTMLDivElement>,
+  ) => {
+    if (e.target === canvasRef.current) return;
+    finishPointerAction(e);
   };
 
   const handleWheel = (e: React.WheelEvent<HTMLCanvasElement>) => {
@@ -475,7 +717,12 @@ export function SliceCanvasPane({
   const isPaintToolActive =
     editable && (activeTool === 'brush' || activeTool === 'erase');
 
-  const cursorClass = isPaintToolActive ? 'cursor-crosshair' : 'cursor-default';
+  const isSpaceOrViewPan = isSpacePanHeld || !isPaintToolActive;
+  const cursorClass = isDraggingPan
+    ? 'cursor-grabbing'
+    : isSpaceOrViewPan
+      ? 'cursor-grab'
+      : 'cursor-crosshair';
 
   const inspectedVoxel = React.useMemo(() => {
     if (sliceIndex === null) return null;
@@ -510,6 +757,20 @@ export function SliceCanvasPane({
       ? '#F87171'
       : (BRATS_LABELS[activeLabel]?.hexColor ?? '#F59E0B');
 
+  const fittedCanvasSize = React.useMemo(() => {
+    if (!viewportSize || viewportSize.width <= 0 || viewportSize.height <= 0) {
+      return null;
+    }
+    const pad = 12;
+    const availW = Math.max(1, viewportSize.width - pad);
+    const availH = Math.max(1, viewportSize.height - pad);
+    const scale = Math.min(availW / axes.colDim, availH / axes.rowDim);
+    return {
+      width: Math.max(1, Math.floor(axes.colDim * scale)),
+      height: Math.max(1, Math.floor(axes.rowDim * scale)),
+    };
+  }, [viewportSize, axes.colDim, axes.rowDim]);
+
   const canvasTransformStyle = {
     transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoomLevel})`,
     imageRendering: 'pixelated' as const,
@@ -525,35 +786,35 @@ export function SliceCanvasPane({
     <div
       data-testid={testId}
       className={cn(
-        'relative flex min-w-0 flex-col overflow-hidden rounded-lg border bg-black transition-colors',
+        'relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-xl border bg-black transition-colors duration-150 ease-[var(--ease-out)]',
         isPaintToolActive
-          ? 'border-sky-500/70 shadow-[0_0_0_1px_rgba(56,189,248,0.2)]'
+          ? 'border-sky-500/60'
           : editable
-            ? 'border-slate-700'
+            ? 'border-[var(--viewer-border-strong)]'
             : 'border-[var(--viewer-border)]',
       )}
     >
-      <div className="flex flex-wrap items-center justify-between gap-1.5 border-b border-[var(--viewer-border)] bg-[var(--viewer-surface)] px-2.5 py-1.5 text-xs sm:px-3">
-        <span className="truncate font-semibold text-[var(--viewer-text)]">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--viewer-border)] bg-[var(--viewer-surface)] px-2.5 py-1 text-xs">
+        <span className="truncate font-medium text-[var(--viewer-text)]">
           {title}
         </span>
 
-        <div className="flex shrink-0 items-center gap-1.5">
+        <div className="flex shrink-0 items-center gap-2">
           {sliceIndex === null ? (
             <span className="font-mono text-[11px] text-[var(--viewer-text-muted)]">
               Không có lát
             </span>
           ) : (
             <>
-              <span className="font-mono text-[11px] text-slate-300 tabular-nums">
+              <span className="font-mono text-[11px] text-[var(--viewer-text-secondary)] tabular-nums">
                 Lát {sliceIndex + 1}/{axes.totalSlices}
               </span>
               <span
                 className={cn(
-                  'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 font-mono text-[10px] font-semibold',
+                  'inline-flex items-center gap-1 rounded px-1.5 py-0.5 font-mono text-[11px] font-medium',
                   editable
-                    ? 'border-sky-500/50 bg-sky-950/80 text-sky-300'
-                    : 'border-slate-700 bg-slate-800/80 text-slate-400',
+                    ? 'border border-sky-500/40 bg-sky-950/70 text-sky-300'
+                    : 'border border-[var(--viewer-border)] bg-[var(--viewer-raised)] text-[var(--viewer-text-muted)]',
                 )}
               >
                 {editable && (
@@ -579,7 +840,7 @@ export function SliceCanvasPane({
                   : 'Phóng đại riêng khung ảnh này'
               }
               onClick={onToggleMaximize}
-              className="inline-flex size-6 items-center justify-center rounded border border-slate-700 bg-slate-900/90 text-slate-300 hover:border-sky-400 hover:bg-slate-800 hover:text-white cursor-pointer"
+              className="inline-flex size-6 items-center justify-center rounded border border-[var(--viewer-border)] bg-[var(--viewer-raised)] text-[var(--viewer-text-secondary)] transition-colors duration-150 hover:border-[var(--viewer-border-strong)] hover:text-[var(--viewer-text)] cursor-pointer"
             >
               {isMaximized ? (
                 <Minimize2 className="size-3.5" aria-hidden="true" />
@@ -594,49 +855,64 @@ export function SliceCanvasPane({
       {sliceIndex === null ? (
         <div
           ref={viewportRef}
-          className="flex min-h-[260px] flex-1 items-center justify-center p-2 text-center text-sm font-medium text-[var(--viewer-text-muted)] sm:min-h-[340px] sm:p-4"
+          className="flex min-h-[300px] flex-1 items-center justify-center p-2 text-center text-sm font-medium text-[var(--viewer-text-muted)] sm:min-h-[360px] lg:min-h-0"
         >
           Không có lát
         </div>
       ) : (
         <div
           ref={viewportRef}
+          onPointerDown={handleViewportPointerDown}
+          onPointerMove={handleViewportPointerMove}
+          onPointerUp={finishViewportPointerAction}
+          onPointerCancel={finishViewportPointerAction}
+          onLostPointerCapture={finishViewportPointerAction}
           className={cn(
-            'relative flex flex-1 items-center justify-center overflow-hidden bg-black p-2 sm:p-3',
-            isMaximized
-              ? 'min-h-[360px] sm:min-h-[460px]'
-              : isFullscreen
-                ? 'min-h-[280px] sm:min-h-[370px]'
-                : 'min-h-[250px] sm:min-h-[340px]',
+            'relative flex flex-1 touch-none select-none items-center justify-center overflow-hidden bg-black p-1.5',
+            isDraggingPan ? 'cursor-grabbing' : 'cursor-grab',
+            'min-h-[300px] sm:min-h-[360px] lg:min-h-0',
           )}
         >
           {/* Nhãn định hướng giải phẫu theo affine */}
           <span
             aria-hidden="true"
-            className="pointer-events-none absolute top-1.5 left-1/2 z-10 -translate-x-1/2 rounded bg-black/70 px-1.5 py-0.5 font-mono text-[10px] font-bold text-sky-300"
+            className="pointer-events-none absolute top-1 left-1/2 z-10 -translate-x-1/2 rounded bg-black/75 px-1.5 py-0.5 font-mono text-[11px] font-medium text-[var(--viewer-text-secondary)]"
           >
             {axes.topBottomAnnotation.top}
           </span>
           <span
             aria-hidden="true"
-            className="pointer-events-none absolute bottom-1.5 left-1/2 z-10 -translate-x-1/2 rounded bg-black/70 px-1.5 py-0.5 font-mono text-[10px] font-bold text-sky-300"
+            className="pointer-events-none absolute bottom-1 left-1/2 z-10 -translate-x-1/2 rounded bg-black/75 px-1.5 py-0.5 font-mono text-[11px] font-medium text-[var(--viewer-text-secondary)]"
           >
             {axes.topBottomAnnotation.bottom}
           </span>
           <span
             aria-hidden="true"
-            className="pointer-events-none absolute top-1/2 left-1.5 z-10 -translate-y-1/2 rounded bg-black/70 px-1.5 py-0.5 font-mono text-[10px] font-bold text-sky-300"
+            className="pointer-events-none absolute top-1/2 left-1 z-10 -translate-y-1/2 rounded bg-black/75 px-1.5 py-0.5 font-mono text-[11px] font-medium text-[var(--viewer-text-secondary)]"
           >
             {axes.leftRightAnnotation.left}
           </span>
           <span
             aria-hidden="true"
-            className="pointer-events-none absolute top-1/2 right-1.5 z-10 -translate-y-1/2 rounded bg-black/70 px-1.5 py-0.5 font-mono text-[10px] font-bold text-sky-300"
+            className="pointer-events-none absolute top-1/2 right-1 z-10 -translate-y-1/2 rounded bg-black/75 px-1.5 py-0.5 font-mono text-[11px] font-medium text-[var(--viewer-text-secondary)]"
           >
             {axes.leftRightAnnotation.right}
           </span>
 
-          <div className="relative inline-flex max-h-full max-w-full items-center justify-center">
+          <div
+            style={
+              fittedCanvasSize
+                ? {
+                    width: `${fittedCanvasSize.width}px`,
+                    height: `${fittedCanvasSize.height}px`,
+                  }
+                : undefined
+            }
+            className={cn(
+              'relative inline-flex items-center justify-center',
+              !fittedCanvasSize && 'max-h-full max-w-full',
+            )}
+          >
             <canvas
               ref={canvasRef}
               width={axes.colDim}
@@ -651,13 +927,15 @@ export function SliceCanvasPane({
               onWheel={handleWheel}
               style={canvasTransformStyle}
               className={cn(
-                canvasSizeClass,
-                'touch-none select-none object-contain',
+                fittedCanvasSize
+                  ? 'block h-full w-full'
+                  : cn(canvasSizeClass, 'object-contain'),
+                'touch-none select-none',
                 cursorClass,
               )}
             />
 
-            {isPaintToolActive && hoverPoint !== null && (
+            {isPaintToolActive && !isSpacePanHeld && !isDraggingPan && hoverPoint !== null && (
               <svg
                 data-testid="brush-cursor-preview"
                 aria-hidden="true"
@@ -704,7 +982,7 @@ export function SliceCanvasPane({
           {/* Voxel HUD góc dưới trái */}
           <div
             aria-hidden="true"
-            className="pointer-events-none absolute bottom-1.5 left-1.5 z-10 hidden max-w-[68%] truncate rounded border border-slate-800/90 bg-slate-950/80 px-2 py-0.5 font-mono text-[10px] text-slate-300 backdrop-blur-xs sm:block"
+            className="pointer-events-none absolute bottom-1.5 left-1.5 z-10 hidden max-w-[68%] truncate rounded border border-[var(--viewer-border)] bg-[var(--viewer-bg)]/90 px-2 py-0.5 font-mono text-[11px] text-[var(--viewer-text-secondary)] tabular-nums sm:block"
           >
             {inspectedHudInfo ? (
               <>
@@ -715,25 +993,25 @@ export function SliceCanvasPane({
                   : ' · Lăn chuột: ±Lát'}
               </>
             ) : (
-              'Lăn chuột: ±Lát · Ctrl+Lăn: Zoom'
+              'Kéo ảnh: Di chuyển · Lăn: ±Lát · Ctrl+Lăn: Zoom'
             )}
           </div>
 
           {/* Cụm nút Zoom nổi góc dưới phải */}
           {(onZoomDelta || onResetView) && (
-            <div className="absolute right-1.5 bottom-1.5 z-10 flex items-center gap-0.5 rounded border border-slate-700/80 bg-slate-950/85 p-0.5 text-[10px] text-slate-200 backdrop-blur-xs">
+            <div className="absolute right-1.5 bottom-1.5 z-10 flex items-center gap-0.5 rounded border border-[var(--viewer-border)] bg-[var(--viewer-bg)]/90 p-0.5 text-[11px] text-[var(--viewer-text)]">
               {onZoomDelta && (
                 <button
                   type="button"
                   aria-label={`Thu nhỏ ${title}`}
                   title="Thu nhỏ (Ctrl + Lăn xuống)"
                   onClick={() => onZoomDelta(-0.15)}
-                  className="inline-flex h-5 w-5 items-center justify-center rounded text-slate-300 hover:bg-slate-800 hover:text-white cursor-pointer"
+                  className="inline-flex h-5 w-5 items-center justify-center rounded text-[var(--viewer-text-secondary)] transition-colors duration-150 hover:bg-[var(--viewer-raised)] hover:text-[var(--viewer-text)] cursor-pointer"
                 >
                   -
                 </button>
               )}
-              <span className="px-1 font-mono tabular-nums text-sky-300">
+              <span className="px-1 font-mono tabular-nums text-[var(--viewer-text)]">
                 {zoomLevel.toFixed(1)}x
               </span>
               {onZoomDelta && (
@@ -742,7 +1020,7 @@ export function SliceCanvasPane({
                   aria-label={`Phóng to ${title}`}
                   title="Phóng to (Ctrl + Lăn lên)"
                   onClick={() => onZoomDelta(0.15)}
-                  className="inline-flex h-5 w-5 items-center justify-center rounded text-slate-300 hover:bg-slate-800 hover:text-white cursor-pointer"
+                  className="inline-flex h-5 w-5 items-center justify-center rounded text-[var(--viewer-text-secondary)] transition-colors duration-150 hover:bg-[var(--viewer-raised)] hover:text-[var(--viewer-text)] cursor-pointer"
                 >
                   +
                 </button>
@@ -753,7 +1031,7 @@ export function SliceCanvasPane({
                   aria-label={`Đặt lại góc nhìn ${title}`}
                   title="Đặt lại tỷ lệ 1:1"
                   onClick={onResetView}
-                  className="inline-flex h-5 items-center justify-center rounded px-1 font-mono text-[10px] text-slate-300 hover:bg-slate-800 hover:text-white cursor-pointer"
+                  className="inline-flex h-5 items-center justify-center rounded px-1 font-mono text-[11px] text-[var(--viewer-text-secondary)] transition-colors duration-150 hover:bg-[var(--viewer-raised)] hover:text-[var(--viewer-text)] cursor-pointer"
                 >
                   1:1
                 </button>

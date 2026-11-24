@@ -20,18 +20,18 @@ export function EmptyState({
   return (
     <div
       className={cn(
-        'flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-[var(--border-default)] bg-[var(--bg-surface)] px-6 py-10 text-center',
+        'refract-panel flex flex-col items-center justify-center gap-3 border-dashed border-[var(--color-rule)] px-6 py-10 text-center',
         className,
       )}
     >
       <div
         aria-hidden="true"
-        className="flex size-12 items-center justify-center rounded-full bg-[var(--bg-muted)] text-[var(--text-secondary)]"
+        className="flex size-11 items-center justify-center rounded-[var(--radius-pill)] border border-[var(--color-rule)] bg-[var(--color-paper-2)] text-[var(--color-muted)]"
       >
-        {icon ?? <Inbox className="size-6" />}
+        {icon ?? <Inbox className="size-5" />}
       </div>
       <div className="flex max-w-md flex-col gap-1">
-        <h3 className="text-base font-semibold text-[var(--text-primary)]">
+        <h3 className="text-base font-medium text-[var(--text-primary)]">
           {title}
         </h3>
         {description && (

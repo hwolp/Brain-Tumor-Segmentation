@@ -1433,4 +1433,123 @@ describe('P3-FE Patient, Case & MRI Upload Flows', () => {
       screen.queryByRole('link', { name: 'BN-SYNC-101' }),
     ).not.toBeInTheDocument();
   });
+
+  it('allows deleting manual mask versions only (hiding delete on AI versions) on CaseDetailPage', async () => {
+    const user = userEvent.setup();
+    const caseData: CaseDto = {
+      id: 'case-mask-del-1',
+      patient_id: 'pat-1',
+      study_date: '2026-05-12',
+      notes: null,
+      reference_volume_id: 'vol-1',
+      readiness: 'ready',
+      is_inputs_locked: true,
+      can_run_inference: true,
+      blocking_reasons: [],
+      latest_mask_version_id: 'mv-manual-2',
+      created_at: '2026-05-12T00:00:00Z',
+      updated_at: '2026-05-12T00:00:00Z',
+    };
+    const aiVersion = {
+      id: 'mv-ai-1',
+      case_id: 'case-mask-del-1',
+      version_number: 1,
+      source: 'ai' as const,
+      base_version_id: null,
+      reference_volume_id: 'vol-1',
+      file_id: 'file-mv-1',
+      created_by: null,
+      created_by_name: null,
+      model_version_id: 'tda-seg-unet:v1',
+      job_id: 'job-1',
+      note: 'AI baseline',
+      label_voxel_counts: { '1': 10, '2': 20, '4': 5 },
+      label_volumes_mm3: { '1': 10, '2': 20, '4': 5 },
+      sha256: 'sha-ai-1',
+      created_at: '2026-05-12T01:00:00Z',
+    };
+    const manualVersion = {
+      id: 'mv-manual-2',
+      case_id: 'case-mask-del-1',
+      version_number: 2,
+      source: 'manual' as const,
+      base_version_id: 'mv-ai-1',
+      reference_volume_id: 'vol-1',
+      file_id: 'file-mv-2',
+      created_by: FIXTURE_USERS.doctor.id,
+      created_by_name: FIXTURE_USERS.doctor.display_name,
+      model_version_id: null,
+      job_id: null,
+      note: 'Manual refinement',
+      label_voxel_counts: { '1': 12, '2': 20, '4': 5 },
+      label_volumes_mm3: { '1': 12, '2': 20, '4': 5 },
+      sha256: 'sha-manual-2',
+      created_at: '2026-05-12T02:00:00Z',
+    };
+    let versions = [manualVersion, aiVersion];
+    let deleteCalled = false;
+
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      const health = createHealthResponse(url);
+      if (health) return health;
+      const method = (init?.method ?? 'GET').toUpperCase();
+
+      if (url.endsWith('/api/v1/cases/case-mask-del-1') && method === 'GET') {
+        return jsonResponse(caseData);
+      }
+      if (url.endsWith('/api/v1/cases/case-mask-del-1/volumes') && method === 'GET') {
+        return jsonResponse([]);
+      }
+      if (url.endsWith('/api/v1/cases/case-mask-del-1/jobs') && method === 'GET') {
+        return jsonResponse({ items: [], total: 0, page: 1, page_size: 20 });
+      }
+      if (url.endsWith('/api/v1/cases/case-mask-del-1/mask-versions') && method === 'GET') {
+        return jsonResponse({
+          items: versions,
+          total: versions.length,
+          page: 1,
+          page_size: 20,
+        });
+      }
+      if (url.endsWith('/api/v1/mask-versions/mv-manual-2') && method === 'DELETE') {
+        deleteCalled = true;
+        versions = [aiVersion];
+        caseData.latest_mask_version_id = 'mv-ai-1';
+        return jsonResponse(
+          {
+            resource_type: 'mask_version',
+            resource_id: 'mv-manual-2',
+            status: 'deleted',
+            files_cleaned: 1,
+            message: 'Đã xóa phiên bản mask thủ công.',
+          },
+          202,
+        );
+      }
+      return jsonResponse({});
+    });
+
+    renderAppAt(['/doctor/cases/case-mask-del-1']);
+
+    const deleteManualBtn = await screen.findByRole('button', {
+      name: 'Xóa phiên bản v2',
+    });
+    expect(deleteManualBtn).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Xóa phiên bản v1' }),
+    ).not.toBeInTheDocument();
+
+    await user.click(deleteManualBtn);
+    const dialog = await screen.findByRole('alertdialog');
+    await user.click(
+      within(dialog).getByRole('button', { name: 'Xóa phiên bản' }),
+    );
+
+    await waitFor(() => {
+      expect(deleteCalled).toBe(true);
+      expect(screen.queryByText('Phiên bản v2')).not.toBeInTheDocument();
+    });
+    expect(screen.getByText('Phiên bản v1')).toBeInTheDocument();
+  });
 });

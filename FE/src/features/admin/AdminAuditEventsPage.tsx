@@ -155,7 +155,7 @@ export function AdminAuditEventsPage() {
   return (
     <div className="flex flex-col gap-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-bold text-[var(--text-primary)]">
+        <h1 className="font-display text-[1.75rem] leading-[1.08] font-normal text-[var(--color-ink)]">
           Nhật ký sự kiện quản trị
         </h1>
 
@@ -172,13 +172,13 @@ export function AdminAuditEventsPage() {
         </Button>
       </div>
 
-      <div className="flex flex-col items-stretch gap-3 rounded-lg border border-[var(--border-default)] bg-[var(--bg-surface)] p-3.5 sm:flex-row sm:flex-wrap sm:items-center sm:p-4">
+      <div className="refract-panel flex flex-col items-stretch gap-3 p-4 sm:flex-row sm:flex-wrap sm:items-center">
         <div className="relative min-w-0 flex-1 sm:min-w-[240px]">
           <label htmlFor="audit-search" className="sr-only">
             Tìm theo người thực hiện, hành động hoặc Request ID
           </label>
           <Search
-            className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-[var(--text-secondary)]"
+            className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-[var(--text-muted)]"
             aria-hidden="true"
           />
           <Input
@@ -186,7 +186,7 @@ export function AdminAuditEventsPage() {
             type="search"
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
-            placeholder="Tìm theo tài khoản, hành động hoặc Request ID..."
+            placeholder="Tìm tài khoản, hành động hoặc Request ID"
             className="pl-9"
           />
         </div>

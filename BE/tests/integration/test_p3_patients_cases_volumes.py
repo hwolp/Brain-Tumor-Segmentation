@@ -28,8 +28,8 @@ from app.models.inference_job import InferenceJob
 from app.models.stored_file import StoredFile
 from app.models.system_setting import SystemSetting
 from app.models.user import User
-from app.services.file_cleanup_service import run_orphan_cleanup
-from app.services.job_service import sync_active_model
+from app.services.inference_job_service import sync_active_model
+from app.services.stored_file_service import run_orphan_cleanup
 
 
 def _make_nifti_gz_bytes(
@@ -1102,7 +1102,7 @@ def test_100_mib_exact_boundary_and_multipart_ingress_limit(
     p3_client: TestClient,
     p3_db_session: Session,
 ) -> None:
-    from app.services.nifti_validator import DEFAULT_MAX_UPLOAD_BYTES
+    from app.validators.nifti_validator import DEFAULT_MAX_UPLOAD_BYTES
 
     _seed_user(p3_db_session, username="doc_100m")
     tok = _login(p3_client, "doc_100m")

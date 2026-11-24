@@ -1,0 +1,35 @@
+FROM python:3.12-slim
+
+ARG TORCH_VERSION=2.8.0
+ARG TORCH_INDEX_URL=https://download.pytorch.org/whl/cu124
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    MODEL_MANIFEST_PATH=/app/worker/manifest.json \
+    MODEL_CHECKPOINT_PATH=/models/best.pt \
+    WORKER_DEVICE=auto \
+    WORKER_ID=cloud-worker-1 \
+    WORKER_POLL_INTERVAL_SECONDS=5 \
+    LOG_LEVEL=INFO
+
+WORKDIR /app
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends libgomp1 && \
+    rm -rf /var/lib/apt/lists/*
+
+COPY requirements-worker.txt ./
+RUN pip install --upgrade pip && \
+    pip install "torch==${TORCH_VERSION}" --index-url "${TORCH_INDEX_URL}" && \
+    pip install -r requirements-worker.txt
+
+COPY worker ./worker
+
+RUN mkdir -p /models && \
+    useradd --create-home --shell /bin/bash worker && \
+    chown -R worker:worker /app /models
+
+USER worker
+
+CMD ["python", "-m", "worker.service"]

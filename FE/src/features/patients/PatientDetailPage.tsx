@@ -275,16 +275,16 @@ export function PatientDetailPage() {
 
       {!detailQuery.isError && detailQuery.data?.patient && (
         <>
-          <section className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-surface)] p-4 sm:p-5">
+          <section className="refract-panel p-5 sm:p-6">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div className="flex min-w-[240px] flex-1 flex-col gap-1">
-                <span className="font-mono text-xs font-semibold uppercase tracking-wide text-[var(--action-primary)]">
+                <span className="font-mono text-xs font-medium text-[var(--color-accent)]">
                   Mã BN: {detailQuery.data.patient.patient_code}
                 </span>
-                <h1 className="text-2xl font-bold text-[var(--text-primary)]">
+                <h1 className="font-display text-[1.75rem] leading-[1.08] font-normal text-[var(--color-ink)]">
                   {detailQuery.data.patient.full_name}
                 </h1>
-                <p className="text-sm text-[var(--text-secondary)]">
+                <p className="text-sm text-[var(--text-secondary)] tabular-nums">
                   Năm sinh: {detailQuery.data.patient.birth_year} · Giới tính:{' '}
                   {formatPatientSex(detailQuery.data.patient.sex)} · Tạo lúc:{' '}
                   {formatDateTimeVN(detailQuery.data.patient.created_at)}
@@ -324,7 +324,7 @@ export function PatientDetailPage() {
           </section>
 
           <section className="flex flex-col gap-3">
-            <h2 className="text-lg font-semibold text-[var(--text-primary)]">
+            <h2 className="font-display text-lg font-normal text-[var(--color-ink)]">
               Các lần chụp MRI ({sortedCases.length})
             </h2>
             <DataTable

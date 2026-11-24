@@ -1,4 +1,4 @@
-"""Admin doctor account management service."""
+"""User account management service."""
 
 from __future__ import annotations
 
@@ -29,7 +29,7 @@ from app.schemas.admin_user import (
 from app.schemas.common import PaginatedResponse
 
 
-class AdminUserService:
+class UserService:
     """Service layer for admin management of doctor accounts."""
 
     def __init__(self, db: Session) -> None:

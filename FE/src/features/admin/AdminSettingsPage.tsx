@@ -157,8 +157,8 @@ export function AdminSettingsPage() {
   };
 
   return (
-    <div className="flex max-w-4xl flex-col gap-5">
-      <h1 className="text-2xl font-bold text-[var(--text-primary)]">
+    <div className="flex max-w-4xl flex-col gap-6">
+      <h1 className="font-display text-[1.75rem] leading-[1.08] font-normal text-[var(--color-ink)]">
         Cấu hình vận hành &amp; Mô hình
       </h1>
 
@@ -197,16 +197,16 @@ export function AdminSettingsPage() {
               }
             }}
           >
-            <section className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-surface)] p-5">
-              <h2 className="mb-4 text-base font-semibold text-[var(--text-primary)]">
+            <section className="refract-panel p-5 sm:p-6">
+              <h2 className="font-display mb-4 text-lg font-normal text-[var(--color-ink)]">
                 Nhận tác vụ và giới hạn dữ liệu
               </h2>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <label
                   className={
                     draft.accepting_jobs
-                      ? 'flex min-h-14 cursor-pointer items-center justify-between gap-3 rounded-lg border border-[var(--status-success-border)] bg-[var(--status-success-bg)]/50 px-4 py-3 transition-colors sm:col-span-2'
-                      : 'flex min-h-14 cursor-pointer items-center justify-between gap-3 rounded-lg border border-[var(--status-warning-border)] bg-[var(--status-warning-bg)]/50 px-4 py-3 transition-colors sm:col-span-2'
+                      ? 'flex min-h-14 cursor-pointer items-center justify-between gap-3 rounded-[var(--radius-inner)] border border-[var(--status-success-border)] bg-[var(--status-success-bg)]/50 px-4 py-3 transition-colors sm:col-span-2'
+                      : 'flex min-h-14 cursor-pointer items-center justify-between gap-3 rounded-[var(--radius-inner)] border border-[var(--status-warning-border)] bg-[var(--status-warning-bg)]/50 px-4 py-3 transition-colors sm:col-span-2'
                   }
                 >
                   <div className="flex flex-col gap-0.5">
@@ -261,8 +261,8 @@ export function AdminSettingsPage() {
               </div>
             </section>
 
-            <section className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-surface)] p-5">
-              <h2 className="mb-4 text-base font-semibold text-[var(--text-primary)]">
+            <section className="refract-panel p-5 sm:p-6">
+              <h2 className="font-display mb-4 text-lg font-normal text-[var(--color-ink)]">
                 Quota lưu trữ
               </h2>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -327,9 +327,9 @@ export function AdminSettingsPage() {
             </div>
           </form>
 
-          <section className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-surface)] p-5">
-            <div className="mb-3 flex items-center justify-between gap-3">
-              <h2 className="text-base font-semibold text-[var(--text-primary)]">
+          <section className="refract-panel p-5 sm:p-6">
+            <div className="mb-4 flex items-center justify-between gap-3 border-b border-[var(--color-rule)] pb-3">
+              <h2 className="font-display text-lg font-normal text-[var(--color-ink)]">
                 Mô hình AI
               </h2>
               {models.some((model) => model.is_active) && (
@@ -337,13 +337,13 @@ export function AdminSettingsPage() {
               )}
             </div>
             {models.length === 0 ? (
-              <p className="text-sm text-[var(--text-secondary)]">
+              <p className="text-sm text-[var(--color-ink-2)]">
                 Chưa có manifest model hợp lệ được đăng ký.
               </p>
             ) : (
-              <ul className="flex flex-col gap-2">
+              <ul className="divide-y divide-[var(--color-rule)]">
                 {models.map((model) => (
-                  <li key={model.id} className="rounded-lg border border-[var(--border-default)] p-3">
+                  <li key={model.id} className="py-3 first:pt-0 last:pb-0">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <p className="font-medium">{model.name} · {model.version}</p>
                       <StatusBadge

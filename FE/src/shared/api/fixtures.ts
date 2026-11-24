@@ -1169,3 +1169,50 @@ export function saveFixtureMaskVersion(
 
   return created;
 }
+
+export function deleteFixtureMaskVersion(
+  maskVersionId: string,
+): DeletionStatusOut {
+  const index = FIXTURE_MASK_VERSIONS.findIndex((m) => m.id === maskVersionId);
+  if (index === -1) {
+    throw new ApiClientError({
+      status: 404,
+      code: 'mask_version_not_found',
+      requestId: 'req-fixture-mask-404',
+    });
+  }
+
+  const target = FIXTURE_MASK_VERSIONS[index]!;
+  if (target.source !== 'manual') {
+    throw new ApiClientError({
+      status: 409,
+      code: 'ai_mask_not_deletable',
+      requestId: 'req-fixture-mask-ai-409',
+    });
+  }
+
+  FIXTURE_MASK_VERSIONS.splice(index, 1);
+  const stillUsed = FIXTURE_MASK_VERSIONS.some(
+    (m) => m.file_id === target.file_id,
+  );
+  if (!stillUsed) {
+    fixtureMaskFileBuffers.delete(target.file_id);
+  }
+
+  const caseItem = FIXTURE_CASES.find((c) => c.id === target.case_id);
+  if (caseItem && caseItem.latest_mask_version_id === target.id) {
+    const remaining = FIXTURE_MASK_VERSIONS.filter(
+      (m) => m.case_id === target.case_id,
+    ).sort((a, b) => b.version_number - a.version_number);
+    caseItem.latest_mask_version_id = remaining[0]?.id ?? null;
+    caseItem.updated_at = new Date().toISOString();
+  }
+
+  return {
+    resource_type: 'mask_version',
+    resource_id: target.id,
+    status: 'deleted',
+    files_cleaned: stillUsed ? 0 : 1,
+    message: 'Đã xóa phiên bản mask thủ công.',
+  };
+}

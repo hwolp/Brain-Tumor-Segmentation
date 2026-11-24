@@ -321,7 +321,7 @@ export function AdminUsersPage() {
   return (
     <div className="flex flex-col gap-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-bold text-[var(--text-primary)]">
+        <h1 className="font-display text-[1.75rem] leading-[1.08] font-normal text-[var(--color-ink)]">
           Quản lý tài khoản bác sĩ
         </h1>
 
@@ -335,13 +335,13 @@ export function AdminUsersPage() {
         </Button>
       </div>
 
-      <div className="flex flex-col items-stretch gap-3 rounded-lg border border-[var(--border-default)] bg-[var(--bg-surface)] p-3.5 sm:flex-row sm:flex-wrap sm:items-center sm:p-4">
+      <div className="refract-panel flex flex-col items-stretch gap-3 p-4 sm:flex-row sm:flex-wrap sm:items-center">
         <div className="relative min-w-0 flex-1 sm:min-w-[220px]">
           <label htmlFor="admin-user-search" className="sr-only">
             Tìm theo username hoặc tên hiển thị
           </label>
           <Search
-            className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-[var(--text-secondary)]"
+            className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-[var(--text-muted)]"
             aria-hidden="true"
           />
           <Input
@@ -349,7 +349,7 @@ export function AdminUsersPage() {
             type="search"
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
-            placeholder="Tìm theo username hoặc tên bác sĩ..."
+            placeholder="Tìm username hoặc họ tên bác sĩ"
             className="pl-9"
           />
         </div>

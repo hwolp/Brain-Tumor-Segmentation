@@ -22,7 +22,7 @@ from app.schemas.admin_user import (
 )
 from app.schemas.common import PaginatedResponse
 from app.schemas.error import ErrorResponse
-from app.services.admin_user_service import AdminUserService
+from app.services.user_service import UserService
 
 router = APIRouter(
     prefix="/api/v1/admin/users",
@@ -50,7 +50,7 @@ def list_doctors(
     page_size: Annotated[int, Query(ge=1, le=100)] = 20,
 ) -> PaginatedResponse[AdminDoctorUserOut]:
     """List doctor accounts with optional search, active status filter, and pagination."""
-    return AdminUserService(db).list_doctors(
+    return UserService(db).list_doctors(
         q=q,
         status=status_filter,
         is_active=is_active,
@@ -72,7 +72,7 @@ def create_doctor(
     request_id: RequestIdDep,
 ) -> AdminDoctorUserOut:
     """Create a new doctor account requiring a password change on first login."""
-    return AdminUserService(db).create_doctor(
+    return UserService(db).create_doctor(
         admin=admin,
         payload=payload,
         ip_address=ip_address,
@@ -93,7 +93,7 @@ def update_doctor(
     request_id: RequestIdDep,
 ) -> AdminDoctorUserOut:
     """Update a doctor's display_name or active status (locking revokes all sessions)."""
-    return AdminUserService(db).update_doctor(
+    return UserService(db).update_doctor(
         admin=admin,
         target_user_id=user_id,
         payload=payload,
@@ -116,7 +116,7 @@ def reset_doctor_password(
 ) -> TemporaryPasswordResponse:
     """Generate a one-time temporary password for a doctor and revoke all active sessions."""
     response.headers["Cache-Control"] = "no-store"
-    return AdminUserService(db).reset_doctor_password(
+    return UserService(db).reset_doctor_password(
         admin=admin,
         target_user_id=user_id,
         ip_address=ip_address,

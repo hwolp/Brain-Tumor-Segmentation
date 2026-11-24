@@ -29,8 +29,8 @@ from app.repositories.volume_repo import VolumeRepository
 from app.schemas.case import CaseCreateRequest, CaseOut, CaseUpdateRequest
 from app.schemas.common import PaginatedResponse
 from app.schemas.patient import DeletionStatusOut
-from app.services.file_cleanup_service import cleanup_deleting_files
-from app.services.nifti_validator import check_model_profile
+from app.services.stored_file_service import StoredFileService
+from app.validators.nifti_validator import check_model_profile
 
 
 def compute_case_request_digest(payload: CaseCreateRequest) -> str:
@@ -431,7 +431,9 @@ class CaseService:
         self.cases.mark_idempotency_keys_deleted_for_case(case.id)
         self.db.commit()
 
-        cleaned = cleanup_deleting_files(self.db, self.storage, files=pending_files, now=now)
+        cleaned = StoredFileService(self.db, self.storage).cleanup_deleting_files(
+            files=pending_files, now=now
+        )
         all_cleaned = all(sf.state == "deleted" for sf in stored_files)
         if all_cleaned:
             case.deleted_at = now

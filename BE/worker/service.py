@@ -7,13 +7,14 @@ import hmac
 import json
 import logging
 import os
+import signal
 import tempfile
 import threading
-import time
 from pathlib import Path
 from typing import Any
 
 import httpx
+import torch
 
 from worker.adapter import (
     InputGeometryError,
@@ -25,6 +26,16 @@ from worker.model import CheckpointVerificationError
 
 logger = logging.getLogger("bts.worker")
 _INTERNAL_PREFIX = "/api/v1/internal"
+
+
+def resolve_worker_device(raw_device: str) -> str:
+    """Resolve WORKER_DEVICE ('auto', 'cpu', 'cuda', 'cuda:0', ...) cleanly."""
+    cleaned = raw_device.strip()
+    if not cleaned:
+        return "cpu"
+    if cleaned.lower() == "auto":
+        return "cuda" if torch.cuda.is_available() else "cpu"
+    return cleaned
 
 
 class WorkerClient:
@@ -127,7 +138,10 @@ class InferenceWorker:
         self.manifest_path = manifest_path
         self.checkpoint_path = checkpoint_path
         self.device = device
-        self.device_type = "GPU" if device.lower() in {"cuda", "gpu"} else "CPU"
+        normalized_dev = device.strip().lower()
+        self.device_type = (
+            "GPU" if (normalized_dev == "gpu" or normalized_dev.startswith("cuda")) else "CPU"
+        )
         self.poll_seconds = poll_seconds
         self.manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         self.model_version_id = f"{self.manifest['model_id']}:{self.manifest['version']}"
@@ -139,6 +153,11 @@ class InferenceWorker:
         self.api = WorkerClient(base_url=api_base_url, token=token)
         self._active: dict[str, Any] | None = None
         self._progress_lock = threading.Lock()
+        self._shutdown_event = threading.Event()
+
+    def request_stop(self) -> None:
+        """Signal the worker loop to exit cleanly after finishing any active job."""
+        self._shutdown_event.set()
 
     def _heartbeat_loop(self, stop_event: threading.Event) -> None:
         while not stop_event.wait(15):
@@ -313,7 +332,7 @@ class InferenceWorker:
 
     def run_forever(self) -> None:
         logger.info("Worker started (%s)", self.device_type)
-        while True:
+        while not self._shutdown_event.is_set():
             try:
                 self.api.post(
                     "/worker/heartbeat",
@@ -327,26 +346,44 @@ class InferenceWorker:
                 if claim is not None:
                     self._run_claim(claim)
                 else:
-                    time.sleep(self.poll_seconds)
+                    self._shutdown_event.wait(self.poll_seconds)
             except KeyboardInterrupt:
-                raise
+                self.request_stop()
+                break
             except Exception as exc:
                 logger.warning("Worker poll failed (%s)", type(exc).__name__)
-                time.sleep(self.poll_seconds)
+                self._shutdown_event.wait(self.poll_seconds)
 
 
 def main() -> None:
     logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"))
     manifest = Path(os.getenv("MODEL_MANIFEST_PATH", "worker/manifest.json"))
     checkpoint_raw = os.getenv("MODEL_CHECKPOINT_PATH")
+    device = resolve_worker_device(os.getenv("WORKER_DEVICE", "cpu"))
+    try:
+        poll_seconds = max(1.0, float(os.getenv("WORKER_POLL_INTERVAL_SECONDS", "5")))
+    except ValueError:
+        poll_seconds = 5.0
+
     worker = InferenceWorker(
         api_base_url=os.getenv("WORKER_API_BASE_URL", "http://127.0.0.1:8000"),
         token=os.getenv("WORKER_TOKEN", ""),
         worker_id=os.getenv("WORKER_ID", "local-worker-1"),
         manifest_path=manifest,
         checkpoint_path=Path(checkpoint_raw) if checkpoint_raw else None,
-        device=os.getenv("WORKER_DEVICE", "cpu"),
+        device=device,
+        poll_seconds=poll_seconds,
     )
+
+    def _handle_shutdown(signum: int, _frame: Any) -> None:
+        logger.info("Received signal %s; shutting down worker gracefully...", signum)
+        worker.request_stop()
+
+    for sig_name in ("SIGTERM", "SIGINT"):
+        sig = getattr(signal, sig_name, None)
+        if sig is not None:
+            signal.signal(sig, _handle_shutdown)
+
     try:
         worker.run_forever()
     finally:

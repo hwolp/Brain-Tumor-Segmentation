@@ -31,10 +31,10 @@ interface ToastContextValue {
 const ToastContext = React.createContext<ToastContextValue | null>(null);
 
 const VARIANT_STYLES: Readonly<Record<ToastVariant, string>> = {
-  info: 'border-[var(--status-info-border)] bg-[var(--bg-surface)] text-[var(--text-primary)]',
-  success: 'border-[var(--status-success-border)] bg-[var(--bg-surface)] text-[var(--text-primary)]',
-  warning: 'border-[var(--status-warning-border)] bg-[var(--bg-surface)] text-[var(--text-primary)]',
-  error: 'border-[var(--status-error-border)] bg-[var(--bg-surface)] text-[var(--text-primary)]',
+  info: 'border-[var(--status-info-border)] bg-[var(--color-light)] text-[var(--color-ink)]',
+  success: 'border-[var(--status-success-border)] bg-[var(--color-light)] text-[var(--color-ink)]',
+  warning: 'border-[var(--status-warning-border)] bg-[var(--color-light)] text-[var(--color-ink)]',
+  error: 'border-[var(--status-error-border)] bg-[var(--color-light)] text-[var(--color-ink)]',
 };
 
 const VARIANT_ICONS: Readonly<Record<ToastVariant, React.ComponentType<{ className?: string }>>> = {
@@ -143,18 +143,18 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
               key={item.id}
               role="status"
               className={cn(
-                'pointer-events-auto flex items-start gap-3 rounded-lg border p-3.5 shadow-md',
+                'pointer-events-auto flex items-start gap-3 rounded-[var(--radius-inner)] border p-4 shadow-[var(--edge-light),var(--shadow-cast)]',
                 VARIANT_STYLES[item.variant],
               )}
             >
               <Icon
-                className={cn('mt-0.5 size-5 shrink-0', VARIANT_ICON_COLOR[item.variant])}
+                className={cn('mt-0.5 size-4 shrink-0', VARIANT_ICON_COLOR[item.variant])}
                 aria-hidden="true"
               />
               <div className="min-w-0 flex-1">
-                <p className="text-sm font-semibold">{item.title}</p>
+                <p className="text-sm font-medium">{item.title}</p>
                 {item.description && (
-                  <p className="mt-0.5 text-sm text-[var(--text-secondary)]">
+                  <p className="mt-1 text-sm text-[var(--text-secondary)]">
                     {item.description}
                   </p>
                 )}
@@ -168,7 +168,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
                 type="button"
                 aria-label="Đóng thông báo"
                 onClick={() => dismissToast(item.id)}
-                className="inline-flex size-7 -mt-0.5 -mr-1 shrink-0 items-center justify-center rounded-md text-[var(--text-secondary)] hover:bg-[var(--bg-muted)] hover:text-[var(--text-primary)] cursor-pointer"
+                className="inline-flex size-8 -mt-1 -mr-1 shrink-0 items-center justify-center rounded-[var(--radius-pill)] text-[var(--color-ink-2)] transition-colors duration-150 hover:bg-[var(--color-paper-2)] hover:text-[var(--color-ink)] cursor-pointer"
               >
                 <X className="size-4" aria-hidden="true" />
               </button>

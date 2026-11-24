@@ -22,6 +22,7 @@ from typing import Any
 import nibabel as nib
 import numpy as np
 from fastapi import UploadFile
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -47,7 +48,10 @@ from app.schemas.mask_version import (
     MaskStatisticsOut,
     MaskVersionOut,
 )
-from app.services.nifti_validator import (
+from app.schemas.patient import DeletionStatusOut
+from app.services.stored_file_service import StoredFileService
+from app.services.volume_service import resolve_effective_quotas
+from app.validators.nifti_validator import (
     _NIFTI_HEADER_ERRORS,
     DEFAULT_MAX_DECOMPRESSED_BYTES,
     DEFAULT_MAX_UPLOAD_BYTES,
@@ -57,7 +61,6 @@ from app.services.nifti_validator import (
     _stream_upload_to_staging,
     extract_valid_orientation,
 )
-from app.services.volume_service import resolve_effective_quotas
 
 _SPATIAL_UNIT_SCALE_TO_MM: dict[str, float] = {
     "mm": 1.0,
@@ -742,6 +745,15 @@ class MaskVersionService:
                 code="mask_version_not_found",
                 message="Không tìm thấy phiên bản mask gắn với Idempotency-Key.",
             )
+        if mv.deleted_at is not None:
+            raise AppError(
+                status_code=409,
+                code="idempotency_conflict",
+                message=(
+                    "Phiên bản mask gắn với khóa Idempotency-Key này đã bị xóa. "
+                    "Vui lòng tạo khóa mới."
+                ),
+            )
         return self._to_out(mv, author_name)
 
     async def save_manual_mask_version(
@@ -1125,3 +1137,139 @@ class MaskVersionService:
                 canonical_path.unlink(missing_ok=True)
             if canonical_staging_key is not None:
                 (self.storage.staging_root / canonical_staging_key).unlink(missing_ok=True)
+
+    def delete_mask_version(
+        self,
+        *,
+        doctor_id: uuid.UUID,
+        mask_version_id: uuid.UUID,
+        request_id: str,
+        ip_address: str,
+    ) -> DeletionStatusOut:
+        """Soft-delete a manual mask version, roll back case head, and reclaim storage."""
+        probed = self.mask_versions.get_by_id_for_owner(mask_version_id, doctor_id)
+        if probed is None:
+            raise AppError(
+                status_code=404,
+                code="mask_version_not_found",
+                message="Không tìm thấy phiên bản mask.",
+            )
+        _, case_probe, _ = probed
+
+        locked_case = self.cases.get_active_for_owner_for_update(case_probe.id, doctor_id)
+        if locked_case is None:
+            raise AppError(
+                status_code=404,
+                code="case_not_found",
+                message="Không tìm thấy ca chụp.",
+            )
+
+        mv = self.db.scalar(
+            select(MaskVersion)
+            .where(
+                MaskVersion.id == mask_version_id,
+                MaskVersion.case_id == locked_case.id,
+                MaskVersion.deleted_at.is_(None),
+            )
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        if mv is None:
+            raise AppError(
+                status_code=404,
+                code="mask_version_not_found",
+                message="Không tìm thấy phiên bản mask.",
+            )
+
+        if mv.source != "manual":
+            raise AppError(
+                status_code=409,
+                code="ai_mask_not_deletable",
+                message=(
+                    "Không thể xóa phiên bản mask do mô hình AI tạo ra. "
+                    "Chỉ được phép xóa các phiên bản chỉnh sửa thủ công."
+                ),
+            )
+
+        now = datetime.now(UTC)
+        mv.deleted_at = now
+        mv.note = None
+        self.db.flush()
+
+        if locked_case.latest_mask_version_id == mv.id:
+            prev = self.mask_versions.get_latest_active_for_case(locked_case.id)
+            locked_case.latest_mask_version_id = prev.id if prev is not None else None
+
+        candidate_file_ids = [mv.file_id]
+        if mv.coverage_file_id is not None:
+            candidate_file_ids.append(mv.coverage_file_id)
+        still_referenced = self.mask_versions.list_active_referenced_file_ids(
+            candidate_file_ids,
+            exclude_mask_version_id=mv.id,
+        )
+        reclaimable_ids = [fid for fid in candidate_file_ids if fid not in still_referenced]
+
+        stored_files = (
+            list(
+                self.db.scalars(
+                    select(StoredFile)
+                    .where(StoredFile.id.in_(reclaimable_ids))
+                    .with_for_update()
+                    .execution_options(populate_existing=True)
+                ).all()
+            )
+            if reclaimable_ids
+            else []
+        )
+        pending_files: list[StoredFile] = []
+        for sf in stored_files:
+            if sf.state != "deleted":
+                sf.state = "deleting"
+                sf.original_name = f"deleted-{sf.id}"
+                pending_files.append(sf)
+
+        self.db.commit()
+
+        cleaned = (
+            StoredFileService(self.db, self.storage).cleanup_deleting_files(
+                files=pending_files, now=now
+            )
+            if pending_files
+            else 0
+        )
+        all_cleaned = all(sf.state == "deleted" for sf in stored_files)
+
+        self.audits.record_event(
+            actor_type="user",
+            actor_id=doctor_id,
+            action="mask_version_deleted",
+            resource_type="mask_version",
+            resource_id=str(mv.id),
+            outcome="success",
+            request_id=request_id,
+            ip_address=ip_address,
+            safe_diff={
+                "case_id": str(locked_case.id),
+                "version_number": mv.version_number,
+                "source": mv.source,
+                "new_latest_mask_version_id": (
+                    str(locked_case.latest_mask_version_id)
+                    if locked_case.latest_mask_version_id is not None
+                    else None
+                ),
+                "files_cleaned": cleaned,
+            },
+        )
+        self.db.commit()
+
+        return DeletionStatusOut(
+            resource_type="mask_version",
+            resource_id=mv.id,
+            status="deleted" if all_cleaned else "deleting",
+            files_cleaned=cleaned,
+            message=(
+                "Đã xóa phiên bản mask thủ công."
+                if all_cleaned
+                else "Đã đánh dấu xóa phiên bản mask thủ công và đang dọn tệp lưu trữ."
+            ),
+        )

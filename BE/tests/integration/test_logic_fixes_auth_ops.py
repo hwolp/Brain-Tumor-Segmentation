@@ -32,8 +32,8 @@ from app.models.session import LoginAttempt, RefreshToken
 from app.models.session import Session as AuthSession
 from app.models.system_setting import SystemSetting
 from app.models.user import User
-from app.services.file_cleanup_service import run_orphan_cleanup
-from app.services.job_service import sync_active_model
+from app.services.inference_job_service import sync_active_model
+from app.services.stored_file_service import run_orphan_cleanup
 
 _BE_DIR = Path(__file__).resolve().parents[2]
 _PASSWORD = "AuthOpsFixPass!2026"

@@ -1,0 +1,30 @@
+services:
+  ai-worker:
+    build:
+      context: ./BE
+      dockerfile: Dockerfile.worker
+      args:
+        TORCH_INDEX_URL: ${TORCH_INDEX_URL:-https://download.pytorch.org/whl/cu124}
+    restart: unless-stopped
+    env_file:
+      - path: ./BE/worker.env
+        required: false
+    environment:
+      WORKER_API_BASE_URL: ${WORKER_API_BASE_URL:-http://host.docker.internal:8000}
+      WORKER_TOKEN: ${WORKER_TOKEN:-}
+      WORKER_ID: ${WORKER_ID:-cloud-worker-1}
+      WORKER_DEVICE: ${WORKER_DEVICE:-auto}
+      WORKER_POLL_INTERVAL_SECONDS: ${WORKER_POLL_INTERVAL_SECONDS:-5}
+      MODEL_MANIFEST_PATH: /app/worker/manifest.json
+      MODEL_CHECKPOINT_PATH: /models/best.pt
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    volumes:
+      - ${HOST_MODEL_CHECKPOINT_PATH:-./models/best.pt}:/models/best.pt:ro
+    # Bo comment khoi duoi neu may host/cloud co NVIDIA GPU + NVIDIA Container Toolkit:
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]

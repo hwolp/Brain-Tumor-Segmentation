@@ -19,7 +19,7 @@ from app.dependencies import (
 from app.schemas.common import PaginatedResponse
 from app.schemas.error import ErrorResponse
 from app.schemas.jobs import InferenceJobOut, JobCreateResponse, SystemAvailabilityOut
-from app.services.job_service import JobService
+from app.services.inference_job_service import InferenceJobService
 
 router = APIRouter(
     tags=["inference jobs"],
@@ -42,7 +42,7 @@ def get_system_availability(
     storage: StorageDep,
     settings: SettingsDep,
 ) -> SystemAvailabilityOut:
-    return SystemAvailabilityOut(**JobService(db, storage, settings).availability())
+    return SystemAvailabilityOut(**InferenceJobService(db, storage, settings).availability())
 
 
 @router.get("/api/v1/cases/{case_id}/jobs")
@@ -55,7 +55,7 @@ def list_case_jobs(
     page: Annotated[int, Query(ge=1)] = 1,
     page_size: Annotated[int, Query(ge=1, le=100)] = 20,
 ) -> PaginatedResponse[InferenceJobOut]:
-    return JobService(db, storage, settings).list_case_jobs(
+    return InferenceJobService(db, storage, settings).list_case_jobs(
         doctor_id=doctor.id, case_id=case_id, page=page, page_size=page_size
     )
 
@@ -71,7 +71,7 @@ def create_case_job(
     client_ip: ClientIpDep,
     idempotency_key: Annotated[str, Header(alias="Idempotency-Key", min_length=1, max_length=128)],
 ) -> JobCreateResponse:
-    job = JobService(db, storage, settings).create_job(
+    job = InferenceJobService(db, storage, settings).create_job(
         doctor_id=doctor.id,
         case_id=case_id,
         idempotency_key=idempotency_key,
@@ -89,7 +89,7 @@ def get_job(
     storage: StorageDep,
     settings: SettingsDep,
 ) -> InferenceJobOut:
-    return JobService(db, storage, settings).get_job(doctor_id=doctor.id, job_id=job_id)
+    return InferenceJobService(db, storage, settings).get_job(doctor_id=doctor.id, job_id=job_id)
 
 
 @router.post("/api/v1/jobs/{job_id}/cancel")
@@ -102,7 +102,7 @@ def cancel_job(
     request_id: RequestIdDep,
     client_ip: ClientIpDep,
 ) -> InferenceJobOut:
-    return JobService(db, storage, settings).cancel_job(
+    return InferenceJobService(db, storage, settings).cancel_job(
         doctor_id=doctor.id,
         job_id=job_id,
         request_id=request_id,

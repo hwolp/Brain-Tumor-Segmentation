@@ -163,7 +163,7 @@ export function Modal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-3 sm:p-4 backdrop-blur-[1px]"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-[oklch(23%_0.035_245/0.36)] p-4"
       onMouseDown={(event) => {
         if (
           event.target === event.currentTarget &&
@@ -182,20 +182,20 @@ export function Modal({
         aria-describedby={description ? descId : undefined}
         tabIndex={-1}
         className={cn(
-          'flex max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-2.5rem)] w-full flex-col overflow-hidden rounded-2xl border border-[var(--border-default)] bg-[var(--bg-surface)] text-[var(--text-primary)] shadow-2xl outline-none',
+          'refract-panel-lead flex max-h-[calc(100dvh-2rem)] w-full flex-col overflow-hidden bg-[var(--color-light)] text-[var(--color-ink)] outline-none',
           SIZE_CLASSES[size],
         )}
       >
         <div
           className={cn(
-            'flex items-start justify-between gap-4 px-5 pt-5 sm:px-6 sm:pt-6',
-            children ? 'pb-3' : 'pb-5',
+            'flex items-start justify-between gap-4 px-6 pt-6',
+            children ? 'pb-4' : 'pb-6',
           )}
         >
           <div className="flex min-w-0 flex-col gap-1">
             <h2
               id={titleId}
-              className="text-lg font-semibold leading-snug text-[var(--text-primary)]"
+              className="font-display text-xl font-normal leading-snug text-[var(--color-ink)]"
             >
               {title}
             </h2>
@@ -213,7 +213,7 @@ export function Modal({
               aria-label="Đóng hộp thoại"
               variant="ghost"
               size="sm"
-              className="-mt-1 -mr-1.5 shrink-0"
+              className="-mt-1 -mr-1 shrink-0"
               disabled={isSubmitting}
               onClick={() => {
                 if (!isSubmitting) {
@@ -228,8 +228,8 @@ export function Modal({
         {children && (
           <div
             className={cn(
-              'min-h-0 flex-1 overflow-y-auto px-5 py-2 text-sm text-[var(--text-primary)] sm:px-6',
-              footer ? 'pb-5' : 'pb-5 sm:pb-6',
+              'min-h-0 flex-1 overflow-y-auto px-6 py-2 text-sm text-[var(--text-primary)]',
+              footer ? 'pb-6' : 'pb-6',
             )}
           >
             {children}
@@ -237,7 +237,7 @@ export function Modal({
         )}
 
         {footer && (
-          <div className="flex flex-col-reverse gap-2.5 border-t border-slate-200/80 bg-slate-50/70 px-5 py-3.5 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end sm:px-6 sm:py-4 [&>*]:w-full sm:[&>*]:w-auto">
+          <div className="flex flex-col-reverse gap-2 border-t border-[var(--color-rule)] bg-[var(--color-paper-2)]/75 px-6 py-4 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end [&>*]:w-full sm:[&>*]:w-auto">
             {footer}
           </div>
         )}

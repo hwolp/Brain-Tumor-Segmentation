@@ -27,8 +27,8 @@ from app.repositories.volume_repo import VolumeRepository
 from app.schemas.patient import DeletionStatusOut
 from app.schemas.volume import VolumeModality, VolumeOut
 from app.services.case_service import compute_case_inference_status
-from app.services.file_cleanup_service import cleanup_deleting_files
-from app.services.nifti_validator import (
+from app.services.stored_file_service import StoredFileService
+from app.validators.nifti_validator import (
     VolumeGeometry,
     check_geometry_compatibility,
     check_model_profile,
@@ -480,7 +480,9 @@ class VolumeService:
         case.readiness = readiness
         self.db.commit()
 
-        cleaned = cleanup_deleting_files(self.db, self.storage, files=pending_files, now=now)
+        cleaned = StoredFileService(self.db, self.storage).cleanup_deleting_files(
+            files=pending_files, now=now
+        )
         all_cleaned = all(sf.state == "deleted" for sf in stored_files)
 
         self.audits.record_event(

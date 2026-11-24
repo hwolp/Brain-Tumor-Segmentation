@@ -28,7 +28,7 @@ from app.schemas.patient import (
     PatientOut,
     PatientUpdateRequest,
 )
-from app.services.file_cleanup_service import cleanup_deleting_files
+from app.services.stored_file_service import StoredFileService
 
 
 class PatientService:
@@ -305,7 +305,9 @@ class PatientService:
         self.cases.mark_idempotency_keys_deleted_for_patient(patient.id)
         self.db.commit()
 
-        cleaned = cleanup_deleting_files(self.db, self.storage, files=pending_files, now=now)
+        cleaned = StoredFileService(self.db, self.storage).cleanup_deleting_files(
+            files=pending_files, now=now
+        )
         sf_by_id = {sf.id: sf for sf in stored_files}
         for case in all_patient_cases:
             if case.deleted_at is None:

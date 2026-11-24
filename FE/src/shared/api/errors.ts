@@ -8,6 +8,16 @@ const ERROR_CODE_MESSAGES: Readonly<Record<string, string>> = {
   unauthorized:
     'Phiên đăng nhập không hợp lệ hoặc đã hết hạn. Vui lòng đăng nhập lại.',
   invalid_token: 'Phiên xác thực không hợp lệ. Vui lòng đăng nhập lại.',
+  invalid_token_alg:
+    'Token xác thực sử dụng thuật toán không hợp lệ. Vui lòng đăng nhập lại.',
+  unknown_kid:
+    'Không nhận diện được khóa ký xác thực (kid). Vui lòng đăng nhập lại.',
+  invalid_issuer:
+    'Nguồn phát hành phiên xác thực không hợp lệ. Vui lòng đăng nhập lại.',
+  invalid_audience:
+    'Phạm vi phiên xác thực không hợp lệ. Vui lòng đăng nhập lại.',
+  invalid_signature:
+    'Chữ ký phiên xác thực không hợp lệ. Vui lòng đăng nhập lại.',
   token_expired: 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.',
   login_failed:
     'Tên đăng nhập hoặc mật khẩu không đúng, hoặc tài khoản đang bị khóa.',
@@ -40,13 +50,18 @@ const ERROR_CODE_MESSAGES: Readonly<Record<string, string>> = {
     'Không tìm thấy hồ sơ bệnh nhân hoặc bạn không có quyền truy cập.',
   case_not_found: 'Không tìm thấy ca chụp hoặc bạn không có quyền truy cập.',
   volume_not_found: 'Không tìm thấy khối ảnh MRI trong ca chụp.',
+  file_not_found: 'Không tìm thấy tệp dữ liệu hoặc ảnh NIfTI trên hệ thống lưu trữ.',
   idempotency_conflict:
     'Yêu cầu bị xung đột khóa thao tác (Idempotency-Key). Vui lòng tải lại dữ liệu trước khi thử lại.',
   case_deleted: 'Ca chụp liên quan đã bị xóa trước đó.',
+  retry_case_deleted: 'Không thể gửi lại job vì ca chụp liên quan đã bị xóa.',
+  method_not_allowed: 'Phương thức HTTP không được hỗ trợ cho tài nguyên này.',
   mask_version_conflict:
     'Đã có phiên bản mask mới hơn trên máy chủ. Hãy giữ bản nháp cục bộ hoặc mở phiên bản mới.',
   mask_version_not_found:
     'Không tìm thấy phiên bản mask hoặc bạn không có quyền truy cập.',
+  ai_mask_not_deletable:
+    'Không thể xóa phiên bản mask do mô hình AI tạo ra. Chỉ được phép xóa các phiên bản chỉnh sửa thủ công.',
   invalid_mask_labels:
     'Tệp mask chứa nhãn không hợp lệ. Chỉ chấp nhận các nhãn BraTS {0, 1, 2, 4}.',
   reference_volume_mismatch:
@@ -68,6 +83,8 @@ const ERROR_CODE_MESSAGES: Readonly<Record<string, string>> = {
   no_active_model:
     'Chưa có mô hình AI hợp lệ được kích hoạt để chạy phân đoạn.',
   model_not_ready: 'Mô hình AI hiện chưa sẵn sàng nhận tác vụ.',
+  model_unavailable:
+    'Mô hình AI hiện không khả dụng. Vui lòng thử lại hoặc liên hệ quản trị viên.',
   intake_paused: 'Hệ thống hiện tạm ngừng nhận tác vụ phân đoạn mới.',
   stale_attempt: 'Phiên xử lý của worker đã hết hiệu lực.',
   settings_version_conflict:
@@ -108,6 +125,8 @@ function fallbackMessageByStatus(status: number): string {
     return ERROR_CODE_MESSAGES.forbidden ?? 'Không có quyền.';
   if (status === 404)
     return ERROR_CODE_MESSAGES.not_found ?? 'Không tìm thấy dữ liệu.';
+  if (status === 405)
+    return ERROR_CODE_MESSAGES.method_not_allowed ?? 'Phương thức không được phép.';
   if (status === 409) return 'Dữ liệu đang bị xung đột phiên bản hoặc trạng thái.';
   if (status === 413)
     return ERROR_CODE_MESSAGES.payload_too_large ?? 'Tệp quá lớn.';
@@ -115,6 +134,8 @@ function fallbackMessageByStatus(status: number): string {
     return ERROR_CODE_MESSAGES.validation_error ?? 'Dữ liệu không hợp lệ.';
   if (status === 429)
     return ERROR_CODE_MESSAGES.rate_limit_exceeded ?? 'Quá nhiều yêu cầu.';
+  if (status === 502 || status === 504)
+    return 'Máy chủ cổng kết nối phản hồi chậm hoặc tạm gián đoạn. Vui lòng thử lại sau.';
   if (status === 503)
     return (
       ERROR_CODE_MESSAGES.service_unavailable ??
@@ -167,11 +188,9 @@ export class ApiClientError extends Error {
     isNetworkError?: boolean;
     retryAfterSeconds?: number | null;
   }) {
-    const normalizedCode = normalizeErrorCode(params.code);
     const mappedMessage =
       params.userMessage ??
-      ERROR_CODE_MESSAGES[normalizedCode] ??
-      fallbackMessageByStatus(params.status);
+      mapErrorCodeToVietnamese(params.code, params.status, params.serverMessage);
 
     super(mappedMessage);
     this.name = 'ApiClientError';
@@ -208,20 +227,46 @@ export function shouldSuppressErrorToast(error: unknown): boolean {
   return isAbortError(error);
 }
 
+const PREFER_SERVER_MESSAGE_CODES = new Set([
+  'invalid_credentials',
+  'validation_error',
+  'invalid_nifti',
+  'geometry_mismatch',
+  'unsupported_geometry',
+  'storage_quota_exceeded',
+]);
+
+function hasVietnameseDiacritics(msg: string): boolean {
+  return /[àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđÀÁẠẢÃÂẦẤẬẨẪĂẰẮẶẲẴÈÉẸẺẼÊỀẾỆỂỄÌÍỊỈĨÒÓỌỎÕÔỒỐỘỔỖƠỜỚỢỞỠÙÚỤỦŨƯỪỨỰỬỮỲÝỴỶỸĐ]/.test(
+    msg,
+  );
+}
+
 export function mapErrorCodeToVietnamese(
   code: string,
   status = 500,
   fallbackMessage?: string,
 ): string {
-  const mapped = ERROR_CODE_MESSAGES[normalizeErrorCode(code)];
+  const normalizedCode = normalizeErrorCode(code);
+  const cleanedServer =
+    fallbackMessage && !looksUnsafeInternalMessage(fallbackMessage)
+      ? fallbackMessage.replace(/^\[[A-Z0-9_]+\]\s*/i, '').trim()
+      : '';
+
+  if (
+    PREFER_SERVER_MESSAGE_CODES.has(normalizedCode) &&
+    cleanedServer &&
+    hasVietnameseDiacritics(cleanedServer)
+  ) {
+    return cleanedServer;
+  }
+
+  const mapped = ERROR_CODE_MESSAGES[normalizedCode];
   if (mapped) {
     return mapped;
   }
-  if (fallbackMessage && !looksUnsafeInternalMessage(fallbackMessage)) {
-    const cleaned = fallbackMessage.replace(/^\[[A-Z0-9_]+\]\s*/i, '').trim();
-    if (cleaned) {
-      return cleaned;
-    }
+  if (cleanedServer) {
+    return cleanedServer;
   }
   return fallbackMessageByStatus(status);
 }
@@ -274,6 +319,14 @@ export function parseErrorEnvelope(
     });
   }
 
+  const rawDetail =
+    payload &&
+    typeof payload === 'object' &&
+    'detail' in payload &&
+    typeof (payload as { detail?: unknown }).detail === 'string'
+      ? (payload as { detail: string }).detail.trim()
+      : '';
+
   const fallbackCode =
     status === 429
       ? 'rate_limit_exceeded'
@@ -281,10 +334,16 @@ export function parseErrorEnvelope(
         ? 'internal_error'
         : 'http_error';
 
+  const safeDetail =
+    rawDetail && !looksUnsafeInternalMessage(rawDetail) && hasVietnameseDiacritics(rawDetail)
+      ? rawDetail
+      : undefined;
+
   return new ApiClientError({
     status,
     code: fallbackCode,
-    userMessage: fallbackMessageByStatus(status),
+    serverMessage: rawDetail || undefined,
+    userMessage: safeDetail ?? fallbackMessageByStatus(status),
     requestId: headerRequestId ?? null,
     isNetworkError: false,
     retryAfterSeconds,

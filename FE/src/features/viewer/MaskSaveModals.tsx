@@ -79,7 +79,7 @@ export function SaveMaskNoteModal({
             maxLength={2000}
             value={note}
             onChange={(e) => setNote(e.target.value)}
-            placeholder="Nhập ghi chú chuyên môn về các vùng ranh giới đã hiệu chỉnh (tùy chọn)..."
+            placeholder="Ghi chú chuyên môn về vùng đã hiệu chỉnh (tùy chọn)"
           />
         </div>
       </form>

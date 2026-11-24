@@ -18,5 +18,9 @@ export { IconButton, type IconButtonProps } from './IconButton';
 export { Modal, type ModalProps } from './Modal';
 export { Pagination, type PaginationProps } from './Pagination';
 export { CardSkeleton, Skeleton, TableSkeleton } from './Skeleton';
+export {
+  RefractLightCanvas,
+  type RefractLightCanvasProps,
+} from './RefractLightCanvas';
 export { StatusBadge, type StatusBadgeProps, type StatusTone } from './StatusBadge';
 export { ToastProvider, useToast, type ToastItem, type ToastVariant } from './Toast';

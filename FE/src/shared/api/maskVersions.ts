@@ -9,12 +9,14 @@ import {
 } from './client';
 import { ApiClientError, isAbortError, parseErrorEnvelope } from './errors';
 import {
+  deleteFixtureMaskVersion,
   getFixtureMaskFileBuffer,
   getFixtureMaskVersionMetadata,
   getFixtureMaskVersions,
   saveFixtureMaskVersion,
 } from './fixtures';
 import type {
+  DeletionStatusOut,
   MaskMetadataExportOut,
   MaskVersionDto,
   PaginatedResponse,
@@ -297,6 +299,21 @@ export async function saveManualMaskVersion(
       },
       body: formData,
       signal: options.signal,
+    },
+  );
+}
+
+export async function deleteMaskVersion(
+  versionId: string,
+  options: { fixtureMode?: boolean } = {},
+): Promise<DeletionStatusOut> {
+  if (options.fixtureMode) {
+    return deleteFixtureMaskVersion(versionId);
+  }
+  return apiRequest<DeletionStatusOut>(
+    `/mask-versions/${encodeURIComponent(versionId)}`,
+    {
+      method: 'DELETE',
     },
   );
 }

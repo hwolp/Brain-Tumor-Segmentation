@@ -28,7 +28,10 @@ from app.schemas.jobs import (
     AdminWorkerOut,
     AuditEventOut,
 )
-from app.services.admin_operations_service import AdminOperationsService
+from app.services.audit_event_service import AuditEventService
+from app.services.inference_job_service import InferenceJobService
+from app.services.system_monitoring_service import SystemMonitoringService
+from app.services.system_setting_service import SystemSettingService
 
 router = APIRouter(
     prefix="/api/v1/admin",
@@ -47,7 +50,7 @@ router = APIRouter(
 def get_overview(
     _admin: AdminUserDep, db: DbSessionDep, storage: StorageDep, settings: SettingsDep
 ) -> AdminOverviewOut:
-    return AdminOperationsService(db, storage, settings).overview()
+    return SystemMonitoringService(db, storage, settings).overview()
 
 
 @router.get("/jobs", response_model=PaginatedResponse[AdminJobOut])
@@ -61,7 +64,7 @@ def list_jobs(
     page: Annotated[int, Query(ge=1)] = 1,
     page_size: Annotated[int, Query(ge=1, le=100)] = 20,
 ) -> PaginatedResponse[AdminJobOut]:
-    return AdminOperationsService(db, storage, settings).list_jobs(
+    return InferenceJobService(db, storage, settings).list_jobs(
         q=q, state=state, page=page, page_size=page_size
     )
 
@@ -74,7 +77,7 @@ def get_job_detail(
     storage: StorageDep,
     settings: SettingsDep,
 ) -> AdminJobDetailOut:
-    return AdminOperationsService(db, storage, settings).get_job_detail(job_id)
+    return InferenceJobService(db, storage, settings).get_job_detail(job_id)
 
 
 @router.post("/jobs/{job_id}/retry", response_model=AdminJobOut, status_code=202)
@@ -87,7 +90,7 @@ def retry_job(
     request_id: RequestIdDep,
     client_ip: ClientIpDep,
 ) -> AdminJobOut:
-    return AdminOperationsService(db, storage, settings).retry_failed_job(
+    return InferenceJobService(db, storage, settings).retry_failed_job(
         job_id=job_id, admin_id=admin.id, request_id=request_id, ip_address=client_ip
     )
 
@@ -96,21 +99,21 @@ def retry_job(
 def list_workers(
     _admin: AdminUserDep, db: DbSessionDep, storage: StorageDep, settings: SettingsDep
 ) -> list[AdminWorkerOut]:
-    return AdminOperationsService(db, storage, settings).list_workers()
+    return SystemMonitoringService(db, storage, settings).list_workers()
 
 
 @router.get("/models", response_model=list[AdminModelOut])
 def list_models(
     _admin: AdminUserDep, db: DbSessionDep, storage: StorageDep, settings: SettingsDep
 ) -> list[AdminModelOut]:
-    return AdminOperationsService(db, storage, settings).list_models()
+    return SystemMonitoringService(db, storage, settings).list_models()
 
 
 @router.get("/settings", response_model=AdminSettingsOut)
 def get_settings(
-    _admin: AdminUserDep, db: DbSessionDep, storage: StorageDep, settings: SettingsDep
+    _admin: AdminUserDep, db: DbSessionDep, settings: SettingsDep
 ) -> AdminSettingsOut:
-    return AdminOperationsService(db, storage, settings).get_settings()
+    return SystemSettingService(db, settings).get_settings()
 
 
 @router.patch("/settings", response_model=AdminSettingsOut)
@@ -118,12 +121,11 @@ def update_settings(
     payload: AdminSettingsUpdate,
     admin: AdminUserDep,
     db: DbSessionDep,
-    storage: StorageDep,
     settings: SettingsDep,
     request_id: RequestIdDep,
     client_ip: ClientIpDep,
 ) -> AdminSettingsOut:
-    return AdminOperationsService(db, storage, settings).update_settings(
+    return SystemSettingService(db, settings).update_settings(
         actor_id=admin.id, payload=payload, request_id=request_id, ip_address=client_ip
     )
 
@@ -132,12 +134,8 @@ def update_settings(
 def list_audit_events(
     _admin: AdminUserDep,
     db: DbSessionDep,
-    storage: StorageDep,
-    settings: SettingsDep,
     q: Annotated[str | None, Query(max_length=128)] = None,
     page: Annotated[int, Query(ge=1)] = 1,
     page_size: Annotated[int, Query(ge=1, le=100)] = 20,
 ) -> PaginatedResponse[AuditEventOut]:
-    return AdminOperationsService(db, storage, settings).list_audit_events(
-        q=q, page=page, page_size=page_size
-    )
+    return AuditEventService(db).list_audit_events(q=q, page=page, page_size=page_size)

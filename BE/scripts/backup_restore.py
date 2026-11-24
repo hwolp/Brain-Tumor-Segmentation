@@ -677,6 +677,7 @@ def verify_storage_and_db_integrity(
                     .join(Case, Case.id == MaskVersion.case_id)
                     .join(Patient, Patient.id == Case.patient_id)
                     .where(
+                        MaskVersion.deleted_at.is_(None),
                         Case.deleting_at.is_(None),
                         Case.deleted_at.is_(None),
                         Patient.deleting_at.is_(None),

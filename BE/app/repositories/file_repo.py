@@ -84,6 +84,7 @@ class FileRepository:
             .join(Patient, Patient.id == Case.patient_id)
             .where(
                 or_(MaskVersion.file_id == sf.id, MaskVersion.coverage_file_id == sf.id),
+                MaskVersion.deleted_at.is_(None),
                 Case.deleting_at.is_(None),
                 Case.deleted_at.is_(None),
                 Patient.deleting_at.is_(None),

@@ -360,7 +360,7 @@ def run_real_worker_e2e_smoke(
     from app.core.security import generate_rsa_keypair, hash_password
     from app.main import create_app
     from app.models.user import User
-    from app.services.job_service import sync_active_model
+    from app.services.inference_job_service import sync_active_model
     from worker.service import InferenceWorker
 
     resolved_db_url = (

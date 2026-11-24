@@ -35,24 +35,24 @@ export function ErrorState({
     <div
       role="alert"
       className={cn(
-        'flex flex-col items-start gap-3 rounded-lg border border-[var(--status-error-border)] bg-[var(--status-error-bg)] p-5',
+        'flex flex-col items-start gap-3 rounded-[var(--radius-card)] border border-[var(--status-error-border)] bg-[var(--status-error-bg)] p-6 shadow-[var(--shadow-card)]',
         className,
       )}
     >
       <div className="flex items-start gap-3">
         <AlertTriangle
-          className="size-5 shrink-0 text-[var(--status-error)]"
+          className="mt-0.5 size-4 shrink-0 text-[var(--status-error)]"
           aria-hidden="true"
         />
         <div className="flex min-w-0 flex-1 flex-col items-start gap-1">
-          <h3 className="text-base font-semibold leading-5 text-[var(--text-primary)]">
+          <h3 className="text-base font-medium leading-5 text-[var(--text-primary)]">
             {title}
           </h3>
           <p className="text-sm text-[var(--text-primary)]">{resolvedMessage}</p>
           {resolvedRequestId && (
-            <p className="mt-0.5 text-[11px] text-[var(--text-secondary)]">
+            <p className="mt-1 text-xs text-[var(--text-secondary)]">
               Mã yêu cầu:{' '}
-              <code className="font-mono text-[11px] text-[var(--text-secondary)] select-all">
+              <code className="font-mono text-xs text-[var(--text-secondary)] select-all">
                 {resolvedRequestId}
               </code>
             </p>

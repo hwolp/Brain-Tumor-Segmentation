@@ -24,6 +24,7 @@ import {
   normalizeApiError,
   normalizeErrorCode,
 } from '@/shared/api/errors';
+import { deleteMaskVersion } from '@/shared/api/maskVersions';
 import {
   MAX_UPLOAD_BYTES,
   deleteCase,
@@ -34,6 +35,7 @@ import {
 } from '@/shared/api/patientsCases';
 import type {
   CaseCreateRequest,
+  MaskVersionDto,
   VolumeDto,
   VolumeModality,
 } from '@/shared/api/types';
@@ -127,6 +129,15 @@ export function CaseDetailPage() {
   );
   const [isDeletingVolume, setIsDeletingVolume] = React.useState(false);
   const [deleteVolumeError, setDeleteVolumeError] = React.useState<{
+    message: string;
+    requestId: string | null;
+  } | null>(null);
+
+  const [deletingMaskVersion, setDeletingMaskVersion] =
+    React.useState<MaskVersionDto | null>(null);
+  const [isDeletingMaskVersion, setIsDeletingMaskVersion] =
+    React.useState(false);
+  const [deleteMaskVersionError, setDeleteMaskVersionError] = React.useState<{
     message: string;
     requestId: string | null;
   } | null>(null);
@@ -803,6 +814,36 @@ export function CaseDetailPage() {
     }
   };
 
+  const handleConfirmDeleteMaskVersion = async () => {
+    if (!deletingMaskVersion) return;
+    setIsDeletingMaskVersion(true);
+    setDeleteMaskVersionError(null);
+    const verNumber = deletingMaskVersion.version_number;
+    try {
+      const deletion = await deleteMaskVersion(deletingMaskVersion.id, {
+        fixtureMode,
+      });
+      setDeletingMaskVersion(null);
+      await invalidateCaseRelatedQueries(data?.caseData.patient_id);
+      pushToast({
+        variant: deletion.status === 'deleting' ? 'info' : 'success',
+        title: `Đã xóa phiên bản v${verNumber}`,
+        description:
+          deletion.status === 'deleting'
+            ? 'Phiên bản mask thủ công đã được gỡ; hệ thống đang tiếp tục dọn dẹp tệp lưu trữ nền.'
+            : 'Phiên bản mask thủ công đã được xóa và giải phóng dung lượng lưu trữ.',
+      });
+    } catch (error) {
+      const normalized = normalizeApiError(error);
+      setDeleteMaskVersionError({
+        message: normalized.message,
+        requestId: normalized.requestId,
+      });
+    } finally {
+      setIsDeletingMaskVersion(false);
+    }
+  };
+
   const handleUpdateCase = async (payload: CaseCreateRequest) => {
     setIsUpdatingCase(true);
     try {
@@ -954,16 +995,16 @@ export function CaseDetailPage() {
 
       {data && (
         <>
-          <section className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-surface)] p-4 sm:p-5">
+          <section className="refract-panel p-5 sm:p-6">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div className="flex min-w-[240px] flex-1 flex-col gap-1">
                 <div className="flex flex-wrap items-center gap-2">
                   {data.caseData.patient_code && (
-                    <span className="inline-flex items-center rounded-md border border-[var(--status-info-border)] bg-[var(--status-info-bg)] px-2 py-0.5 font-mono text-xs font-semibold text-[var(--action-primary)]">
+                    <span className="inline-flex items-center rounded-[var(--radius-pill)] border border-[var(--status-info-border)] bg-[var(--status-info-bg)] px-2.5 py-0.5 font-mono text-xs font-medium text-[var(--color-accent)]">
                       Mã BN: {data.caseData.patient_code}
                     </span>
                   )}
-                  <span className="break-all font-mono text-xs font-semibold text-[var(--action-primary)]">
+                  <span className="break-all font-mono text-xs font-medium text-[var(--color-accent)]">
                     Mã ca: {data.caseData.id}
                   </span>
                   <StatusBadge
@@ -971,10 +1012,10 @@ export function CaseDetailPage() {
                     tone={getCaseReadinessMeta(data.caseData.readiness).tone}
                   />
                 </div>
-                <h1 className="text-2xl font-bold text-[var(--text-primary)]">
+                <h1 className="font-display text-[1.75rem] leading-[1.08] font-normal text-[var(--color-ink)]">
                   Ca chụp ngày {formatStudyDate(data.caseData.study_date)}
                 </h1>
-                <p className="text-sm text-[var(--text-secondary)]">
+                <p className="text-sm text-[var(--text-secondary)] tabular-nums">
                   Cập nhật gần nhất: {formatDateTimeVN(data.caseData.updated_at)}
                 </p>
               </div>
@@ -1108,8 +1149,8 @@ export function CaseDetailPage() {
           </section>
 
           <section className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-            <div className="flex flex-col gap-3 rounded-xl border border-[var(--border-default)] bg-[var(--bg-surface)] p-5">
-              <h2 className="text-base font-semibold text-[var(--text-primary)]">
+            <div className="refract-panel flex flex-col gap-3 p-5 sm:p-6">
+              <h2 className="font-display text-lg font-normal text-[var(--color-ink)]">
                 Trạng thái tác vụ AI gần nhất
               </h2>
 
@@ -1142,7 +1183,7 @@ export function CaseDetailPage() {
                       tone={getJobStateMeta(latestJob.state).tone}
                     />
                   </div>
-                  <p className="text-[var(--text-secondary)]">
+                  <p className="text-[var(--text-secondary)] tabular-nums">
                     Giai đoạn: <strong>{formatJobStage(latestJob.stage)}</strong>
                     {latestJob.completed_slices !== null &&
                       latestJob.total_slices !== null &&
@@ -1162,24 +1203,23 @@ export function CaseDetailPage() {
                           latestJob.completed_slices,
                           latestJob.total_slices,
                         )}
-                        className="h-2 w-full overflow-hidden rounded-full bg-[var(--bg-muted)]"
+                        className="h-2 w-full overflow-hidden rounded-md bg-[var(--bg-muted)]"
                       >
                         <div
-                          className="h-full rounded-full bg-[var(--action-primary)] transition-all"
+                          className="h-full w-full origin-left rounded-md bg-[var(--action-primary)] transition-transform duration-300 ease-[var(--ease-out)]"
                           style={{
-                            width: `${Math.min(
-                              100,
-                              Math.round(
-                                (latestJob.completed_slices /
-                                  latestJob.total_slices) *
-                                  100,
+                            transform: `scaleX(${Math.min(
+                              1,
+                              Math.max(
+                                0,
+                                latestJob.completed_slices / latestJob.total_slices,
                               ),
-                            )}%`,
+                            )})`,
                           }}
                         />
                       </div>
                     )}
-                  <p className="text-xs text-[var(--text-secondary)]">
+                  <p className="text-xs text-[var(--text-secondary)] tabular-nums">
                     Tạo lúc: {formatDateTimeVN(latestJob.created_at)} · Lượt thử:{' '}
                     {latestJob.attempt_count}
                     {latestJob.attempt_count > 1
@@ -1249,11 +1289,11 @@ export function CaseDetailPage() {
                       <p className="mb-2 text-xs font-semibold text-[var(--text-secondary)]">
                         Lịch sử tác vụ trước đó ({olderJobs.length})
                       </p>
-                      <ul className="flex flex-col gap-2">
+                      <ul className="divide-y divide-[var(--color-rule)]">
                         {olderJobs.map((oldJob) => (
                           <li
                             key={oldJob.id}
-                            className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-[var(--border-default)] px-2.5 py-2 text-xs"
+                            className="flex flex-wrap items-center justify-between gap-2 py-2.5 text-xs first:pt-0 last:pb-0"
                           >
                             <div className="flex min-w-0 flex-col gap-0.5">
                               <span className="break-all font-mono text-[var(--text-secondary)]">
@@ -1294,27 +1334,27 @@ export function CaseDetailPage() {
               )}
             </div>
 
-            <div className="flex flex-col gap-3 rounded-xl border border-[var(--border-default)] bg-[var(--bg-surface)] p-5">
+            <div className="refract-panel flex flex-col gap-3 p-5 sm:p-6">
               <div className="flex items-center justify-between">
-                <h2 className="text-base font-semibold text-[var(--text-primary)]">
+                <h2 className="font-display text-lg font-normal text-[var(--color-ink)]">
                   Phiên bản Mask ({data.maskVersions.length})
                 </h2>
                 <Layers
-                  className="size-5 text-[var(--text-secondary)]"
+                  className="size-5 text-[var(--color-muted)]"
                   aria-hidden="true"
                 />
               </div>
 
               {data.maskVersions.length === 0 ? (
-                <p className="text-sm text-[var(--text-secondary)]">
+                <p className="text-sm text-[var(--color-ink-2)]">
                   Chưa có phiên bản mask nào được lưu. Bạn có thể mở Viewer để tạo mask thủ công hoặc chạy AI khi đủ hai xung.
                 </p>
               ) : (
-                <ul className="flex flex-col gap-3">
+                <ul className="divide-y divide-[var(--color-rule)]">
                   {data.maskVersions.map((ver) => (
                     <li
                       key={ver.id}
-                      className="rounded-lg border border-[var(--border-default)] p-3"
+                      className="py-3.5 first:pt-0 last:pb-0"
                     >
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <div className="flex items-center gap-2">
@@ -1340,6 +1380,22 @@ export function CaseDetailPage() {
                             >
                               Mở v{ver.version_number}
                             </Link>
+                          )}
+                          {ver.source === 'manual' && (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              aria-label={`Xóa phiên bản v${ver.version_number}`}
+                              className="border-[var(--color-danger)]/40 text-[var(--color-danger)] hover:bg-[var(--color-danger)]/10"
+                              onClick={() => {
+                                setDeleteMaskVersionError(null);
+                                setDeletingMaskVersion(ver);
+                              }}
+                            >
+                              <Trash2 className="size-3.5" aria-hidden="true" />
+                              Xóa
+                            </Button>
                           )}
                         </div>
                       </div>
@@ -1494,6 +1550,40 @@ export function CaseDetailPage() {
                 {deleteCaseError.requestId && (
                   <span className="sr-only">
                     Mã tham chiếu: {deleteCaseError.requestId}
+                  </span>
+                )}
+              </Alert>
+            )}
+          </ConfirmDialog>
+
+          <ConfirmDialog
+            open={Boolean(deletingMaskVersion)}
+            onClose={() => {
+              if (!isDeletingMaskVersion) {
+                setDeletingMaskVersion(null);
+                setDeleteMaskVersionError(null);
+              }
+            }}
+            onConfirm={handleConfirmDeleteMaskVersion}
+            title="Xóa phiên bản mask thủ công?"
+            description={
+              deletingMaskVersion
+                ? `Phiên bản chỉnh tay v${deletingMaskVersion.version_number} sẽ bị xóa khỏi ca chụp và thu hồi dung lượng tệp mask tương ứng. Các phiên bản AI gốc và phiên bản khác vẫn được giữ nguyên.`
+                : ''
+            }
+            confirmLabel="Xóa phiên bản"
+            variant="destructive"
+            isSubmitting={isDeletingMaskVersion}
+          >
+            {deleteMaskVersionError && (
+              <Alert
+                variant="error"
+                title="Không thể xóa phiên bản mask"
+                description={deleteMaskVersionError.message}
+              >
+                {deleteMaskVersionError.requestId && (
+                  <span className="sr-only">
+                    Mã tham chiếu: {deleteMaskVersionError.requestId}
                   </span>
                 )}
               </Alert>

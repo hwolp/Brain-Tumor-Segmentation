@@ -10,7 +10,7 @@ export function Skeleton({ className, ...props }: SkeletonProps) {
     <div
       aria-hidden="true"
       className={cn(
-        'animate-pulse rounded-md bg-slate-200/80',
+        'animate-pulse rounded-[var(--radius-inner)] bg-[var(--color-paper-3)]',
         className,
       )}
       {...props}
@@ -30,7 +30,7 @@ export function TableSkeleton({
       role="status"
       aria-busy="true"
       aria-label="Đang tải danh sách"
-      className="flex flex-col gap-3 rounded-lg border border-[var(--border-default)] bg-[var(--bg-surface)] p-4"
+      className="refract-panel flex flex-col gap-3 p-5"
     >
       <span className="sr-only">Đang tải dữ liệu...</span>
       <div className="grid gap-3" style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}>
@@ -38,11 +38,11 @@ export function TableSkeleton({
           <Skeleton key={`head-${idx}`} className="h-5 w-3/4" />
         ))}
       </div>
-      <div className="flex flex-col gap-2.5 pt-2">
+      <div className="flex flex-col gap-3 pt-3">
         {Array.from({ length: rows }).map((_, rowIdx) => (
           <div
             key={`row-${rowIdx}`}
-            className="grid gap-3 border-t border-[var(--border-default)] pt-2.5"
+            className="grid gap-3 border-t border-[var(--border-default)] pt-3"
             style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}
           >
             {Array.from({ length: columns }).map((__, colIdx) => (
@@ -61,7 +61,7 @@ export function CardSkeleton() {
       role="status"
       aria-busy="true"
       aria-label="Đang tải thông tin"
-      className="flex flex-col gap-3 rounded-lg border border-[var(--border-default)] bg-[var(--bg-surface)] p-5"
+      className="refract-panel flex flex-col gap-3 p-5"
     >
       <span className="sr-only">Đang tải dữ liệu...</span>
       <Skeleton className="h-6 w-1/3" />

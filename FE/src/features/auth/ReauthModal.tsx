@@ -2,7 +2,11 @@ import * as React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Eye, EyeOff, KeyRound, Lock, LogOut, User } from 'lucide-react';
 import { getDefaultRouteForUser, useAuthStore } from '@/app/auth-store';
-import { normalizeApiError } from '@/shared/api/errors';
+import {
+  extractFieldErrors,
+  normalizeApiError,
+  normalizeErrorCode,
+} from '@/shared/api/errors';
 import { Alert, Button, FormField, Input, Modal, useToast } from '@/shared/ui';
 
 export function ReauthModal() {
@@ -27,7 +31,12 @@ export function ReauthModal() {
     message: string;
     requestId: string | null;
     retryAfterSeconds: number | null;
+    highlightCredentials: boolean;
   } | null>(null);
+  const [fieldErrors, setFieldErrors] = React.useState<{
+    username?: string;
+    password?: string;
+  }>({});
 
   React.useEffect(() => {
     if (reauthRequired) {
@@ -36,22 +45,29 @@ export function ReauthModal() {
       setPassword('');
       setShowPassword(false);
       setErrorInfo(null);
+      setFieldErrors({});
     }
   }, [reauthRequired, reauthUsername]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorInfo(null);
+    setFieldErrors({});
 
     const targetUsername = (
       allowSwitchAccount ? usernameInput : (reauthUsername ?? usernameInput)
     ).trim();
 
     if (!targetUsername || !password) {
+      setFieldErrors({
+        username: !targetUsername ? 'Vui lòng nhập tên đăng nhập.' : undefined,
+        password: !password ? 'Vui lòng nhập mật khẩu.' : undefined,
+      });
       setErrorInfo({
         message: 'Vui lòng nhập đầy đủ tên đăng nhập và mật khẩu.',
         requestId: null,
         retryAfterSeconds: null,
+        highlightCredentials: false,
       });
       return;
     }
@@ -84,10 +100,22 @@ export function ReauthModal() {
       }
     } catch (error) {
       const normalized = normalizeApiError(error);
+      const code = normalizeErrorCode(normalized.code);
+      const apiFieldErrors = extractFieldErrors(error);
+      if (Object.keys(apiFieldErrors).length > 0) {
+        setFieldErrors({
+          username: apiFieldErrors.username,
+          password: apiFieldErrors.password,
+        });
+      }
       setErrorInfo({
         message: normalized.message,
         requestId: normalized.requestId,
         retryAfterSeconds: normalized.retryAfterSeconds,
+        highlightCredentials:
+          normalized.status === 401 ||
+          code === 'login_failed' ||
+          code === 'invalid_credentials',
       });
     } finally {
       setIsSubmitting(false);
@@ -176,6 +204,7 @@ export function ReauthModal() {
             id="reauth-username"
             label="Tên đăng nhập"
             required
+            error={fieldErrors.username}
             helperText={
               allowSwitchAccount
                 ? 'Đăng nhập tài khoản khác sẽ xóa bản nháp mask hiện tại.'
@@ -186,16 +215,25 @@ export function ReauthModal() {
               <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center">
                 <div className="relative flex min-w-0 flex-1 items-center">
                   <User
-                    className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-slate-400"
+                    className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-[var(--text-muted)]"
                     aria-hidden="true"
                   />
                   <Input
                     {...fieldProps}
+                    hasError={Boolean(
+                      fieldErrors.username ||
+                        (allowSwitchAccount && errorInfo?.highlightCredentials),
+                    )}
                     type="text"
                     autoComplete="username"
                     readOnly={!allowSwitchAccount}
                     value={usernameInput}
-                    onChange={(e) => setUsernameInput(e.target.value)}
+                    onChange={(e) => {
+                      setUsernameInput(e.target.value);
+                      if (fieldErrors.username) {
+                        setFieldErrors((prev) => ({ ...prev, username: undefined }));
+                      }
+                    }}
                     disabled={isSubmitting}
                     className={
                       !allowSwitchAccount
@@ -223,20 +261,38 @@ export function ReauthModal() {
             )}
           </FormField>
 
-          <FormField id="reauth-password" label="Mật khẩu" required>
+          <FormField
+            id="reauth-password"
+            label="Mật khẩu"
+            required
+            error={fieldErrors.password}
+          >
             {(fieldProps) => (
               <div className="relative flex items-center">
                 <Lock
-                  className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-slate-400"
+                  className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-[var(--text-muted)]"
                   aria-hidden="true"
                 />
                 <Input
                   {...fieldProps}
+                  hasError={Boolean(
+                    fieldErrors.password || errorInfo?.highlightCredentials,
+                  )}
                   ref={passwordInputRef}
                   type={showPassword ? 'text' : 'password'}
                   autoComplete="current-password"
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  onChange={(e) => {
+                    setPassword(e.target.value);
+                    if (fieldErrors.password) {
+                      setFieldErrors((prev) => ({ ...prev, password: undefined }));
+                    }
+                    if (errorInfo?.highlightCredentials) {
+                      setErrorInfo((prev) =>
+                        prev ? { ...prev, highlightCredentials: false } : prev,
+                      );
+                    }
+                  }}
                   disabled={isSubmitting}
                   className="pl-10 pr-10"
                 />
@@ -244,7 +300,7 @@ export function ReauthModal() {
                   type="button"
                   aria-label={showPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
                   onClick={() => setShowPassword((v) => !v)}
-                  className="absolute top-1/2 right-1.5 inline-flex size-8 min-h-[32px] min-w-[32px] -translate-y-1/2 items-center justify-center rounded-md text-[var(--text-secondary)] hover:bg-[var(--bg-muted)] hover:text-[var(--text-primary)] cursor-pointer"
+                  className="absolute top-1/2 right-1.5 inline-flex size-8 min-h-[32px] min-w-[32px] -translate-y-1/2 items-center justify-center rounded-[var(--radius-pill)] text-[var(--text-muted)] transition-colors duration-150 hover:bg-[var(--bg-muted)] hover:text-[var(--text-primary)] cursor-pointer"
                 >
                   {showPassword ? (
                     <EyeOff className="size-4" aria-hidden="true" />

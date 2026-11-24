@@ -22,6 +22,7 @@ from app.dependencies import (
 from app.schemas.common import PaginatedResponse
 from app.schemas.error import ErrorResponse
 from app.schemas.mask_version import MaskMetadataExportOut, MaskVersionOut
+from app.schemas.patient import DeletionStatusOut
 from app.services.mask_version_service import MaskVersionService
 
 _STREAM_CHUNK_SIZE = 65536
@@ -187,4 +188,26 @@ def export_mask_version_metadata(
     return MaskVersionService(db, storage, settings).get_mask_metadata(
         doctor_id=doctor.id,
         mask_version_id=mask_version_id,
+    )
+
+
+@router.delete(
+    "/mask-versions/{mask_version_id}",
+    status_code=status.HTTP_202_ACCEPTED,
+)
+def delete_mask_version(
+    mask_version_id: uuid.UUID,
+    doctor: DoctorUserDep,
+    db: DbSessionDep,
+    storage: StorageDep,
+    settings: SettingsDep,
+    request_id: RequestIdDep,
+    client_ip: ClientIpDep,
+) -> DeletionStatusOut:
+    """Soft-delete a doctor-owned manual mask version and reclaim storage."""
+    return MaskVersionService(db, storage, settings).delete_mask_version(
+        doctor_id=doctor.id,
+        mask_version_id=mask_version_id,
+        request_id=request_id,
+        ip_address=client_ip,
     )

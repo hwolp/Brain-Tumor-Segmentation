@@ -16,7 +16,10 @@ import {
   closeAuthBroadcastChannel,
 } from '@/app/sessionCoordinator';
 import { apiRequest } from '@/shared/api/client';
-import { mapErrorCodeToVietnamese } from '@/shared/api/errors';
+import {
+  mapErrorCodeToVietnamese,
+  parseErrorEnvelope,
+} from '@/shared/api/errors';
 import { FIXTURE_USERS } from '@/shared/api/fixtures';
 import { downloadProtectedFileBuffer } from '@/shared/api/maskVersions';
 import { uploadCaseVolume } from '@/shared/api/patientsCases';
@@ -1455,5 +1458,127 @@ describe('P2 Auth, Single-Flight Refresh, Multi-Tab Coordination & Draft Protect
         value: OriginalXhr,
       });
     }
+  });
+
+  it('validates login/change-password/reauth errors with Vietnamese messages and aria-invalid field state', async () => {
+    const user = userEvent.setup();
+
+    // Unit checks on new error code mappings and context-sensitive Vietnamese server messages
+    expect(mapErrorCodeToVietnamese('file_not_found', 404)).toMatch(
+      /Không tìm thấy tệp/,
+    );
+    expect(mapErrorCodeToVietnamese('model_unavailable', 503)).toMatch(
+      /Mô hình AI hiện không khả dụng/,
+    );
+    expect(mapErrorCodeToVietnamese('retry_case_deleted', 409)).toMatch(
+      /ca chụp liên quan đã bị xóa/,
+    );
+    expect(mapErrorCodeToVietnamese('invalid_signature', 401)).toMatch(
+      /Chữ ký phiên xác thực không hợp lệ/,
+    );
+    expect(
+      mapErrorCodeToVietnamese(
+        'invalid_credentials',
+        400,
+        'Mật khẩu hiện tại không chính xác.',
+      ),
+    ).toBe('Mật khẩu hiện tại không chính xác.');
+    expect(
+      parseErrorEnvelope({ detail: 'Lỗi cấu hình tạm thời.' }, 502, 'req-502')
+        .userMessage,
+    ).toBe('Lỗi cấu hình tạm thời.');
+    expect(parseErrorEnvelope({}, 504, 'req-504').userMessage).toMatch(
+      /cổng kết nối/,
+    );
+
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      const health = healthResponseIfMatched(url);
+      if (health) return health;
+      if (url.endsWith('/api/v1/auth/login')) {
+        return new Response(
+          JSON.stringify({
+            error: {
+              code: 'rate_limit_exceeded',
+              message: 'Too many requests',
+              details: null,
+              request_id: 'req-login-429',
+            },
+          }),
+          {
+            status: 429,
+            headers: {
+              'Content-Type': 'application/json',
+              'Retry-After': '45',
+            },
+          },
+        );
+      }
+      if (url.endsWith('/api/v1/auth/change-password')) {
+        return new Response(
+          JSON.stringify({
+            error: {
+              code: 'invalid_credentials',
+              message: 'Mật khẩu hiện tại không chính xác.',
+              details: null,
+              request_id: 'req-cp-wrong',
+            },
+          }),
+          { status: 400, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+      return jsonResponse({});
+    });
+
+    // 1. Login empty submit + 429 Retry-After
+    const loginView = renderWithApp(['/login']);
+    await user.click(screen.getByRole('button', { name: 'Đăng nhập' }));
+    expect(screen.getByText('Vui lòng nhập tên đăng nhập.')).toBeInTheDocument();
+    expect(screen.getByText('Vui lòng nhập mật khẩu.')).toBeInTheDocument();
+    expect(screen.getByLabelText(/Tên đăng nhập/)).toHaveAttribute(
+      'aria-invalid',
+      'true',
+    );
+    expect(screen.getByLabelText(/^Mật khẩu/)).toHaveAttribute(
+      'aria-invalid',
+      'true',
+    );
+
+    await user.type(screen.getByLabelText(/Tên đăng nhập/), 'bs.minh');
+    await user.type(screen.getByLabelText(/^Mật khẩu/), 'wrong-password-123');
+    await user.click(screen.getByRole('button', { name: 'Đăng nhập' }));
+
+    expect(
+      await screen.findByText('Tạm giới hạn đăng nhập'),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/Vui lòng đợi khoảng 45 giây trước khi thử đăng nhập lại/),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/Mã yêu cầu: req-login-429/)).toBeInTheDocument();
+    loginView.unmount();
+
+    // 2. ChangePasswordPage maps 400 invalid_credentials accurately to current_password
+    useAuthStore.setState({
+      status: 'must_change_password',
+      user: { ...DOCTOR_USER, must_change_password: true },
+      accessToken: 'temp-jwt-cp',
+      fixtureMode: false,
+    });
+    const cpView = renderWithApp(['/change-password']);
+    await user.type(screen.getByLabelText(/Mật khẩu hiện tại/), 'wrong-current-pass');
+    await user.type(screen.getByLabelText(/^Mật khẩu mới/), 'ValidNewPass1234!');
+    await user.type(screen.getByLabelText(/Nhập lại mật khẩu mới/), 'ValidNewPass1234!');
+    await user.click(screen.getByRole('button', { name: 'Lưu mật khẩu mới' }));
+
+    const matches = await screen.findAllByText(
+      'Mật khẩu hiện tại không chính xác.',
+    );
+    expect(matches.length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByLabelText(/Mật khẩu hiện tại/)).toHaveAttribute(
+      'aria-invalid',
+      'true',
+    );
+    expect(screen.getByText(/Mã yêu cầu: req-cp-wrong/)).toBeInTheDocument();
+    cpView.unmount();
   });
 });

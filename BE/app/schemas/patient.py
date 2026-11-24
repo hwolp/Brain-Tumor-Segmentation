@@ -112,7 +112,7 @@ class PatientOut(BaseModel):
 class DeletionStatusOut(BaseModel):
     """Deletion status response returned by 202 DELETE endpoints."""
 
-    resource_type: Literal["patient", "case", "volume"]
+    resource_type: Literal["patient", "case", "volume", "mask_version"]
     resource_id: uuid.UUID
     status: Literal["deleting", "deleted"]
     files_cleaned: int = Field(default=0, ge=0)

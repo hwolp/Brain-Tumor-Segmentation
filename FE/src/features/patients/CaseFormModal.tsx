@@ -448,7 +448,7 @@ export function CaseFormModal({
                 }
                 handleFieldEdit();
               }}
-              placeholder="Nhập ghi chú lâm sàng (tùy chọn)..."
+              placeholder="Ghi chú lâm sàng (tùy chọn)"
               disabled={isSubmitting}
               hasError={Boolean(fieldErrors.notes)}
             />
