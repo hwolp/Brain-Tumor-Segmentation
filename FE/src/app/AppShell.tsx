@@ -11,6 +11,7 @@ import {
   Menu,
   Settings,
   ShieldCheck,
+  Stethoscope,
   UserCircle,
   UserCog,
   Users,
@@ -53,6 +54,22 @@ const ADMIN_NAV_ITEMS: readonly NavItem[] = [
   { to: '/admin/audit-events', label: 'Nhật ký quản trị', icon: ShieldCheck },
 ];
 
+function resolveSectionTitle(role: UserRole, pathname: string): string {
+  if (role === 'admin') {
+    if (pathname.startsWith('/admin/users')) return 'Tài khoản bác sĩ';
+    if (pathname.startsWith('/admin/jobs')) return 'Quản lý tác vụ AI';
+    if (pathname.startsWith('/admin/settings')) return 'Cấu hình vận hành';
+    if (pathname.startsWith('/admin/audit-events')) return 'Nhật ký quản trị';
+    return 'Tổng quan hệ thống';
+  }
+  if (/^\/doctor\/cases\/[^/]+\/viewer/.test(pathname)) return 'Trình xem MRI';
+  if (pathname.startsWith('/doctor/cases/')) return 'Chi tiết ca chụp';
+  if (/^\/doctor\/patients\/[^/]+/.test(pathname)) return 'Hồ sơ bệnh nhân';
+  if (pathname.startsWith('/doctor/patients')) return 'Bệnh nhân';
+  if (pathname.startsWith('/doctor/profile')) return 'Tài khoản cá nhân';
+  return 'Tổng quan ca';
+}
+
 export interface AppShellProps {
   role: UserRole;
 }
@@ -74,8 +91,8 @@ export function AppShell({ role }: AppShellProps) {
   );
 
   const navItems = role === 'admin' ? ADMIN_NAV_ITEMS : DOCTOR_NAV_ITEMS;
-  const workspaceTitle =
-    role === 'admin' ? 'Quản trị hệ thống' : 'Trạm làm việc Bác sĩ';
+  const workspaceRootLabel = role === 'admin' ? 'Quản trị' : 'Khu vực Bác sĩ';
+  const sectionTitle = resolveSectionTitle(role, location.pathname);
 
   React.useEffect(() => {
     if (!mobileMenuOpen) return;
@@ -222,7 +239,7 @@ export function AppShell({ role }: AppShellProps) {
         <div
           className={cn(
             'border-t border-[var(--border-default)] py-3',
-            collapsed ? 'px-2' : 'px-4',
+            collapsed ? 'px-1.5' : 'px-4',
           )}
         >
           <div className={cn('flex items-center gap-2', collapsed && 'justify-center')}>
@@ -230,6 +247,17 @@ export function AppShell({ role }: AppShellProps) {
               label={role === 'admin' ? 'Admin' : 'Bác sĩ'}
               tone={role === 'admin' ? 'warning' : 'info'}
               showIcon={!collapsed}
+              icon={
+                role === 'admin' ? (
+                  <ShieldCheck className="size-3.5 shrink-0" aria-hidden="true" />
+                ) : (
+                  <Stethoscope className="size-3.5 shrink-0" aria-hidden="true" />
+                )
+              }
+              title={
+                role === 'admin' ? 'Quản trị viên hệ thống' : 'Bác sĩ chuyên khoa'
+              }
+              className={collapsed ? 'px-2 py-1 text-[11px]' : undefined}
             />
           </div>
         </div>
@@ -289,9 +317,20 @@ export function AppShell({ role }: AppShellProps) {
               onClick={() => setMobileMenuOpen(true)}
               icon={<Menu className="size-4" />}
             />
-            <span className="text-sm font-medium text-[var(--text-primary)]">
-              {workspaceTitle}
-            </span>
+            <div className="flex min-w-0 items-center gap-2 text-sm">
+              <span className="hidden text-[var(--color-muted)] sm:inline">
+                {workspaceRootLabel}
+              </span>
+              <span
+                aria-hidden="true"
+                className="hidden text-[var(--color-rule)] sm:inline"
+              >
+                /
+              </span>
+              <span className="truncate font-medium text-[var(--color-ink)]">
+                {sectionTitle}
+              </span>
+            </div>
           </div>
 
           <div className="ml-auto flex flex-wrap items-center justify-end gap-2 sm:gap-3">

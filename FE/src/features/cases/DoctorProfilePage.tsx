@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { KeyRound, UserCircle } from 'lucide-react';
+import { KeyRound, Stethoscope, UserCircle } from 'lucide-react';
 import { useAuthStore } from '@/app/auth-store';
 import { apiRequest } from '@/shared/api/client';
 import type { UserDto } from '@/shared/api/types';
@@ -61,7 +61,11 @@ export function DoctorProfilePage() {
           <div>
             <dt className="text-xs text-[var(--text-secondary)]">Vai trò</dt>
             <dd className="mt-1">
-              <StatusBadge label="Bác sĩ chuyên khoa" tone="info" />
+              <StatusBadge
+                label="Bác sĩ chuyên khoa"
+                tone="info"
+                icon={<Stethoscope className="size-3.5 shrink-0" aria-hidden="true" />}
+              />
             </dd>
           </div>
           <div>

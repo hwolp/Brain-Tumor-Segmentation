@@ -35,6 +35,8 @@ export interface StatusBadgeProps {
   label: string;
   tone?: StatusTone;
   showIcon?: boolean;
+  icon?: React.ReactNode;
+  title?: string;
   className?: string;
 }
 
@@ -45,18 +47,21 @@ export function StatusBadge({
   label,
   tone = 'neutral',
   showIcon = true,
+  icon,
+  title,
   className,
 }: StatusBadgeProps) {
   const Icon = TONE_ICONS[tone];
   return (
     <span
+      title={title}
       className={cn(
-        'inline-flex items-center gap-1.5 rounded-[var(--radius-pill)] border px-2.5 py-0.5 text-xs font-medium leading-5',
+        'inline-flex min-h-[24px] items-center gap-1.5 whitespace-nowrap rounded-[var(--radius-pill)] border px-2.5 py-1 text-xs font-medium leading-none tracking-[0.005em]',
         TONE_STYLES[tone],
         className,
       )}
     >
-      {showIcon && <Icon className="size-3.5 shrink-0" aria-hidden="true" />}
+      {showIcon && (icon ?? <Icon className="size-3.5 shrink-0" aria-hidden="true" />)}
       <span>{label}</span>
     </span>
   );
