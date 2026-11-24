@@ -1,0 +1,49 @@
+# Python / Backend
+BE/.venv/
+.venv/
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Node / Frontend
+FE/node_modules/
+FE/dist/
+FE/.vite/
+FE/coverage/
+FE/playwright-report/
+FE/test-results/
+FE/blob-report/
+
+# Environment & Secrets
+.env
+.env.*
+!.env.example
+!BE/.env.example
+!FE/.env.example
+*.pem
+*.key
+secrets/
+BE/secrets/
+
+# Storage, Backups, Checkpoints & Heavy Medical Data
+storage/
+backups/
+*.pt
+*.pth
+*.onnx
+*.ckpt
+*.nii
+*.nii.gz
+!BE/tests/fixtures/**
+!FE/src/test/fixtures/**
+
+# IDE & OS
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

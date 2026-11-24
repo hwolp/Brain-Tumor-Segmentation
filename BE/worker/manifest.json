@@ -1,0 +1,142 @@
+{
+  "model_id": "tda-seg-unet",
+  "version": "cce-dice-ep136",
+  "pipeline_version": "tda-segunet-2d-v1",
+  "verification_status": "verified",
+  "checkpoint_sha256": "6ec9edc3b0d75474d8d8d427e8d962b6f7fabff1d2aab08ad972b08775413d3f",
+  "checkpoint_env_var": "MODEL_CHECKPOINT_PATH",
+  "default_checkpoint_path": "D:/Nam4/Ky1/PBL6/Demo2/outputs/tda_seg_unet_cce_dice/best.pt",
+  "architecture": {
+    "class_name": "TDASegUNet",
+    "state_dict_key": "model",
+    "layer_names": ["i", "d1", "d2", "d3", "d4", "u1", "u2", "u3", "u4", "out"],
+    "in_channels": 6,
+    "num_classes": 4,
+    "base_channels": 16,
+    "dropout_schedule": {
+      "i": 0.2,
+      "d1": 0.2,
+      "d2": 0.3,
+      "d3": 0.3,
+      "d4": 0.5,
+      "u1": 0.5,
+      "u2": 0.3,
+      "u3": 0.2,
+      "u4": 0.2
+    },
+    "total_parameters": 1943060,
+    "state_dict_tensor_count": 118,
+    "channel_order": [
+      "flair",
+      "t1ce",
+      "flair_h0_pi",
+      "flair_h1_pi",
+      "t1ce_h0_pi",
+      "t1ce_h1_pi"
+    ]
+  },
+  "required_modalities": ["flair", "t1ce"],
+  "input_profile": {
+    "name": "BraTS2020_preprocessed_axial",
+    "format": ["nii", "nii.gz"],
+    "ndim": 3,
+    "shape": [240, 240, 155],
+    "spacing_mm": [1.0, 1.0, 1.0],
+    "slice_axis": 2,
+    "geometry_tolerance_mm": 0.0001
+  },
+  "normalization": {
+    "pipeline_version": "tda-segunet-2d-v1",
+    "method": "zscore_per_volume_nonzero",
+    "scope": "3d_volume",
+    "nonzero_eps": 1e-6,
+    "background_fill": 0.0,
+    "dtype": "float32"
+  },
+  "crop_config": {
+    "center_estimation": "automatic_flair_center",
+    "patch_size": 128,
+    "gaussian_sigma": 1.0,
+    "sobel_edge_weight": 0.15,
+    "threshold_method": "yen_with_p90_fallback",
+    "opening_kernel": [3, 3],
+    "closing_kernel": [5, 5],
+    "fill_holes": true,
+    "min_component_size": 20,
+    "empty_slice_fallback": "slice_center",
+    "clamp_to_bounds": true,
+    "outside_crop_policy": "fill_background_and_mark_unevaluated_in_coverage"
+  },
+  "tda_config": {
+    "library": "gudhi.CubicalComplex",
+    "filtration": "sublevel_top_dimensional_cells",
+    "homology_dimensions": [0, 1],
+    "homology_coeff_field": 2,
+    "tda_input_size": 64,
+    "grid_size": 32,
+    "output_size": 128,
+    "bandwidth": 0.30,
+    "min_persistence": 0.05,
+    "birth_range": [-6.0, 6.0],
+    "persistence_range": [0.0, 12.0],
+    "empty_input_policy": "zeros_no_nan_inf"
+  },
+  "class_mapping": {
+    "contiguous_to_raw": {
+      "0": 0,
+      "1": 1,
+      "2": 2,
+      "3": 4
+    },
+    "raw_to_contiguous": {
+      "0": 0,
+      "1": 1,
+      "2": 2,
+      "4": 3
+    },
+    "labels": {
+      "0": "background",
+      "1": "NCR/NET",
+      "2": "ED",
+      "4": "ET"
+    },
+    "composite_regions": {
+      "WT": [1, 2, 4],
+      "TC": [1, 4],
+      "ET": [4]
+    },
+    "export_dtype": "uint8"
+  },
+  "dependencies": {
+    "python": "3.13.5",
+    "torch": "2.8.0",
+    "numpy": "2.2.6",
+    "scipy": "1.16.1",
+    "nibabel": "5.4.2",
+    "gudhi": "3.13.0",
+    "scikit-image": "0.26.0",
+    "pandas": "2.3.1",
+    "psutil": "7.0.0"
+  },
+  "training_source_reference": {
+    "notebook": "D:/Nam4/Ky1/PBL6/Demo2/TDA_CCE_DICE_LOSS.ipynb",
+    "preprocessing_module": "D:/Nam4/Ky1/PBL6/tda_seg_unet/preprocess.py",
+    "tda_module": "D:/Nam4/Ky1/PBL6/tda_seg_unet/tda.py",
+    "dataset_summary": "D:/Nam4/Ky1/PBL6/Demo2/prepared_brats2d_70slices/summary.json",
+    "checkpoint_epoch": 136,
+    "checkpoint_best_val_wt_dice": 0.9185095033286583,
+    "checkpoint_val_metrics": {
+      "loss": 0.30576105386165003,
+      "loss_cce": 0.09457046344887461,
+      "loss_dice": 0.5169516446416225,
+      "wt": 0.9185095033286583,
+      "tc": 0.8780184999982006,
+      "et": 0.8627176750018045
+    },
+    "loss_function": "0.5 * CrossEntropyLoss + 0.5 * SoftDiceLoss(classes=[1, 2, 3])",
+    "optimizer": "Adam(lr=1e-4)",
+    "batch_size": 2,
+    "seed": 42,
+    "evaluation_155slices_summary": "D:/Nam4/Ky1/PBL6/Demo2/outputs/evaluation_155slices/test_set_155slices_summary.json"
+  }
+}

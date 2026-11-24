@@ -1,0 +1,144 @@
+@import "@fontsource/noto-sans/400.css";
+@import "@fontsource/noto-sans/500.css";
+@import "@fontsource/noto-sans/600.css";
+@import "@fontsource/noto-sans/700.css";
+@import "tailwindcss";
+
+:root {
+  /* Core clinical workstation design tokens */
+  --bg-canvas: #F8FAFC;
+  --bg-surface: #FFFFFF;
+  --bg-muted: #F1F5F9;
+  --text-primary: #0F172A;
+  --text-secondary: #475569;
+  --action-primary: #0369A1;
+  --action-primary-hover: #075985;
+  --action-primary-foreground: #FFFFFF;
+  --border-default: #CBD5E1;
+
+  /* Status tokens (4.5:1+ contrast on corresponding surfaces) */
+  --status-error: #B91C1C;
+  --status-error-bg: #FEF2F2;
+  --status-error-border: #FECACA;
+  --status-warning: #B45309;
+  --status-warning-bg: #FFFBEB;
+  --status-warning-border: #FDE68A;
+  --status-success: #15803D;
+  --status-success-bg: #F0FDF4;
+  --status-success-border: #BBF7D0;
+  --status-info: #0369A1;
+  --status-info-bg: #F0F9FF;
+  --status-info-border: #BAE6FD;
+
+  /* Viewer dark workstation tokens */
+  --viewer-bg: #0B1020;
+  --viewer-surface: #131B2E;
+  --viewer-border: #26324B;
+  --viewer-text: #F8FAFC;
+  --viewer-text-muted: #CBD5E1;
+
+  /* Focus & typography */
+  --focus-ring: #0369A1;
+  --radius-sm: 0.375rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+
+  /* Semantic aliases */
+  --background: var(--bg-canvas);
+  --foreground: var(--text-primary);
+  --card: var(--bg-surface);
+  --card-foreground: var(--text-primary);
+  --primary: var(--action-primary);
+  --primary-foreground: var(--action-primary-foreground);
+  --muted: var(--bg-muted);
+  --muted-foreground: var(--text-secondary);
+  --border: var(--border-default);
+  --destructive: var(--status-error);
+  --destructive-foreground: #FFFFFF;
+  --ring: var(--focus-ring);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-ring: var(--ring);
+  --font-sans: "Noto Sans", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+@layer base {
+  html {
+    font-family: "Noto Sans", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: 16px;
+    line-height: 1.5;
+    background-color: var(--bg-canvas);
+    color: var(--text-primary);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  body {
+    margin: 0;
+    min-height: 100dvh;
+    background-color: var(--bg-canvas);
+    color: var(--text-primary);
+  }
+
+  *:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
+  }
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+@media print {
+  @page {
+    margin: 15mm;
+  }
+
+  body * {
+    visibility: hidden !important;
+  }
+
+  [data-print-report],
+  [data-print-report] * {
+    visibility: visible !important;
+  }
+
+  [data-print-report] {
+    display: block !important;
+    position: absolute;
+    inset: 0 auto auto 0;
+    width: 100%;
+  }
+
+  [data-print-hidden="true"] {
+    display: none !important;
+  }
+
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+}

@@ -1,0 +1,44 @@
+import * as React from 'react';
+import { Inbox } from 'lucide-react';
+import { cn } from '@/shared/lib/cn';
+
+export interface EmptyStateProps {
+  title: string;
+  description?: string;
+  icon?: React.ReactNode;
+  action?: React.ReactNode;
+  className?: string;
+}
+
+export function EmptyState({
+  title,
+  description,
+  icon,
+  action,
+  className,
+}: EmptyStateProps) {
+  return (
+    <div
+      className={cn(
+        'flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-[var(--border-default)] bg-[var(--bg-surface)] px-6 py-10 text-center',
+        className,
+      )}
+    >
+      <div
+        aria-hidden="true"
+        className="flex size-12 items-center justify-center rounded-full bg-[var(--bg-muted)] text-[var(--text-secondary)]"
+      >
+        {icon ?? <Inbox className="size-6" />}
+      </div>
+      <div className="flex max-w-md flex-col gap-1">
+        <h3 className="text-base font-semibold text-[var(--text-primary)]">
+          {title}
+        </h3>
+        {description && (
+          <p className="text-sm text-[var(--text-secondary)]">{description}</p>
+        )}
+      </div>
+      {action && <div className="mt-1">{action}</div>}
+    </div>
+  );
+}
