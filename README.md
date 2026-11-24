@@ -2,7 +2,7 @@
 
 Hệ thống trạm làm việc phân đoạn u não trên ảnh MRI đa xung (**FLAIR** + **T1ce**) sử dụng mô hình **TDA-SegUNet**, gồm Backend **FastAPI + PostgreSQL + Alembic**, Frontend **React + Vite + TypeScript + NiiVue**, và AI inference adapter/worker.
 
-> **Trạng thái hiện tại:** Đã hoàn tất và nghiệm thu đầy đủ cho bản phát hành cục bộ **v1** từ **P0–P7**: **P0 (AI adapter & manifest)**, **P1 (Foundation: FastAPI health/error/logging/storage, PostgreSQL + Alembic, React/Vite shell + proxy, OpenAPI → TypeScript types)**, **P2 (Authentication RS256/Argon2id/Refresh Rotation, RBAC Admin/Doctor, Quản lý tài khoản bác sĩ, Session Coordination đa tab)**, **P3 (Quản lý bệnh nhân theo owner, Tạo ca chụp Idempotent, Upload & Kiểm tra NIfTI FLAIR/T1ce, Quota & Phân quyền file)**, **P4 (Viewer 3 bố cục, Brush/Erase trục Axial, Undo/Redo theo lát, Lưu phiên bản mask bất biến có Idempotency-Key & kiểm soát xung đột 409, thống kê thể tích vật lý & xuất `.nii.gz`)**, **P5 (Model Registry, Hàng đợi Inference Job, Worker Lease/Heartbeat/Reaper & Công bố AI Mask bất biến)**, **P6 (Admin Operations Dashboard, Retry Job, Cấu hình Optimistic Lock, Audit Kỹ thuật không PII & Bản in Báo cáo theo phiên bản)** và **P7 (Nghiệm thu E2E toàn hệ thống, Bảo mật/Concurrency, Backup/Restore cô lập, Benchmark Real AI 155 lát & Tài liệu bàn giao)** — xem [`docs/reports/P7-QA-acceptance.md`](docs/reports/P7-QA-acceptance.md) và [`docs/IMPLEMENTATION-CHECKLIST.md`](docs/IMPLEMENTATION-CHECKLIST.md). Phase **P8** là backlog mở rộng sau v1.
+> **Trạng thái hiện tại:** Đã hoàn tất và nghiệm thu đầy đủ cho bản phát hành cục bộ **v1** từ **P0–P7**: **P0 (AI adapter & manifest)**, **P1 (Foundation: FastAPI health/error/logging/storage, PostgreSQL + Alembic, React/Vite shell + proxy, OpenAPI → TypeScript types)**, **P2 (Authentication RS256/Argon2id/Refresh Rotation, RBAC Admin/Doctor, Quản lý tài khoản bác sĩ, Session Coordination đa tab)**, **P3 (Quản lý bệnh nhân theo owner, Tạo ca chụp Idempotent, Upload & Kiểm tra NIfTI FLAIR/T1ce, Quota & Phân quyền file)**, **P4 (Viewer 3 bố cục, Brush/Erase trục Axial, Undo/Redo theo lát, Lưu phiên bản mask bất biến có Idempotency-Key & kiểm soát xung đột 409, thống kê thể tích vật lý & xuất `.nii.gz`)**, **P5 (Model Registry, Hàng đợi Inference Job, Worker Lease/Heartbeat/Reaper & Công bố AI Mask bất biến)**, **P6 (Admin Operations Dashboard, Retry Job, Cấu hình Optimistic Lock, Audit Kỹ thuật không PII & Bản in Báo cáo theo phiên bản)** và **P7 (Nghiệm thu E2E toàn hệ thống, Bảo mật/Concurrency, Backup/Restore cô lập, Benchmark Real AI 155 lát & Tài liệu bàn giao)**. Phase **P8** là backlog mở rộng sau v1.
 
 ---
 
@@ -16,8 +16,8 @@ Hệ thống trạm làm việc phân đoạn u não trên ảnh MRI đa xung (*
   - `worker/` — AI inference adapter, verified manifest (`P0`) & single-process worker service (`P5`).
   - `tests/{unit,integration,contract,ai}` — Bộ kiểm thử Python (**`121` tests** tổng cộng: **`108` BE** (`35` unit + `66` integration + `7` contract) + **`13` AI**).
 - `FE/` — Frontend React + Vite + TypeScript (`src/app`, `src/features`, `src/shared`, `src/viewer-adapter`, `src/test`).
-- `docs/` — Tài liệu thiết kế, hợp đồng dùng chung ([`docs/CONTRACTS.md`](docs/CONTRACTS.md)), kế hoạch phase ([`docs/PHASES.md`](docs/PHASES.md)), và báo cáo nghiệm thu (`docs/reports/`).
-- `docker-compose.yml` — Dịch vụ PostgreSQL 16 cục bộ (`postgres:16-alpine`).
+- `docker-compose.yml` — Stack Docker Compose gồm 3 dịch vụ (`postgres`, `api`, `frontend`) chạy trong 1 stack `braintumorsegmentation` trên Docker Desktop.
+- `start-dev.bat` — Script khởi chạy dev cục bộ trên Windows (PostgreSQL Docker + BE/FE/Worker trên host).
 
 ---
 
@@ -26,6 +26,33 @@ Hệ thống trạm làm việc phân đoạn u não trên ảnh MRI đa xung (*
 - **Docker Desktop** (kèm Docker Compose v2; đã kiểm thử với Docker `29.8.1`, Compose `v5.5.1`).
 - **Python `>= 3.12`** (đã kiểm thử với Python `3.13.5`).
 - **Node.js & npm** (đã kiểm thử với Node `v22.23.2`, npm `10.9.8`).
+
+---
+
+## Khởi chạy nhanh toàn bộ stack bằng Docker Compose (PostgreSQL + BE + FE)
+
+Nếu muốn chạy **PostgreSQL + Backend FastAPI + Frontend Vite** cùng lúc và quản lý gọn trong **1 stack** `braintumorsegmentation` trên Docker Desktop (có hỗ trợ hot-reload code BE/FE qua bind mount):
+
+```powershell
+# Khởi động toàn bộ stack (tự sinh khóa JWT nếu chưa có và chạy Alembic migration)
+docker compose up -d --build
+
+# Kiểm tra trạng thái healthy của cả 3 service (postgres, api, frontend)
+docker compose ps
+
+# Xem log realtime (hoặc dừng toàn bộ stack)
+docker compose logs -f
+docker compose down
+```
+
+- **Bootstrap tài khoản Admin đầu tiên** (khi chạy lần đầu trên DB mới):
+
+```powershell
+docker compose exec -it api python -m scripts.bootstrap_admin --username adminops --display-name "Quản trị hệ thống"
+```
+
+- **Xung đột cổng `8000` (nếu có):** Đặt `$env:API_PORT = "8001"` trước khi chạy `docker compose up -d --build`.
+- **AI Worker:** Vẫn chạy trên host bằng môi trường Python AI (`$env:WORKER_PYTHON`) và trỏ `WORKER_API_BASE_URL=http://127.0.0.1:8000` (hoặc cổng `API_PORT` đã chọn).
 
 ---
 
@@ -54,7 +81,7 @@ BE\.venv\Scripts\python.exe -m pip install --upgrade pip
 BE\.venv\Scripts\python.exe -m pip install -r BE/requirements.txt
 ```
 
-> **Lưu ý tách biệt môi trường API vs AI Worker (`docs/BE/06-testing-deployment.md` mục 4):**  
+> **Lưu ý tách biệt môi trường API vs AI Worker:**  
 > `BE/requirements.txt` chỉ khai báo các gói phục vụ FastAPI, PostgreSQL/Alembic, NIfTI validation và kiểm thử BE (`fastapi`, `uvicorn`, `sqlalchemy`, `alembic`, `psycopg[binary]`, `nibabel`, `numpy`, `scikit-image`, `pytest`, `ruff`, ...).  
 > AI adapter/worker (`BE/worker/`, `BE/tests/ai/`) yêu cầu thêm bộ gói AI đã khóa trong `BE/worker/manifest.json` (`dependencies`: `torch==2.8.0`, `numpy==2.2.6`, `scipy==1.16.1`, `nibabel==5.4.2`, `gudhi==3.13.0`, `scikit-image==0.26.0`, `pandas==2.3.1`, `psutil==7.0.0`), chạy trên Python environment riêng cho worker (trên máy phát triển hiện tại là `D:\Nam4\Ky1\PBL6\.venv`). Riêng `pytest==9.0.3` là gói phục vụ chạy test (`BE/tests/ai/`), **không** nằm trong `manifest.json["dependencies"]`.
 

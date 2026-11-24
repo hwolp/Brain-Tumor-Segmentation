@@ -47,3 +47,8 @@ backups/
 Thumbs.db
 .vscode/
 .idea/
+
+# Local agent configs & internal docs
+.agents/
+.codex/
+docs/

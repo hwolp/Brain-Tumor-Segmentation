@@ -17,31 +17,67 @@ services:
       retries: 10
       start_period: 10s
 
-  # Future P1-FE / P7 local compose expansion (bind localhost only per docs/SPEC.md):
-  # api:
-  #   build: ./BE
-  #   restart: unless-stopped
-  #   env_file:
-  #     - ./BE/.env
-  #   environment:
-  #     DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-bts_user}:${POSTGRES_PASSWORD:-bts_local_dev_pw}@postgres:5432/${POSTGRES_DB:-bts_dev}
-  #     STORAGE_ROOT: /var/lib/bts/storage
-  #   ports:
-  #     - "127.0.0.1:8000:8000"
-  #   volumes:
-  #     - bts_storage:/var/lib/bts/storage
-  #   depends_on:
-  #     postgres:
-  #       condition: service_healthy
-  #
-  # frontend:
-  #   build: ./FE
-  #   restart: unless-stopped
-  #   ports:
-  #     - "127.0.0.1:5173:5173"
-  #   depends_on:
-  #     - api
+  api:
+    build: ./BE
+    restart: unless-stopped
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload", "--reload-dir", "/app/app"]
+    env_file:
+      - path: ./BE/.env
+        required: false
+    environment:
+      APP_ENV: ${APP_ENV:-local}
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-bts_user}:${POSTGRES_PASSWORD:-bts_local_dev_pw}@postgres:5432/${POSTGRES_DB:-bts_dev}
+      STORAGE_ROOT: /app/storage
+      JWT_PRIVATE_KEY_PATH: /app/secrets/jwt-private.pem
+      JWT_PUBLIC_KEY_PATH: /app/secrets/jwt-public.pem
+      MODEL_MANIFEST_PATH: /app/worker/manifest.json
+      PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:-http://127.0.0.1:5173}
+      ALLOWED_ORIGINS: '${ALLOWED_ORIGINS:-["http://127.0.0.1:5173","http://localhost:5173"]}'
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      RUN_MIGRATIONS: ${RUN_MIGRATIONS:-true}
+      AUTO_INIT_JWT_KEYS: ${AUTO_INIT_JWT_KEYS:-true}
+    ports:
+      - "127.0.0.1:${API_PORT:-8000}:8000"
+    volumes:
+      - ./BE/app:/app/app
+      - ./BE/migrations:/app/migrations
+      - ./BE/scripts:/app/scripts
+      - ./BE/worker:/app/worker
+      - ./BE/alembic.ini:/app/alembic.ini:ro
+      - ./BE/storage:/app/storage
+      - ./BE/secrets:/app/secrets
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health/ready', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+
+  frontend:
+    build: ./FE
+    restart: unless-stopped
+    environment:
+      VITE_API_PROXY_TARGET: http://api:8000
+      VITE_USE_FIXTURES: ${VITE_USE_FIXTURES:-false}
+      VITE_USE_POLLING: "true"
+    ports:
+      - "127.0.0.1:${FE_PORT:-5173}:5173"
+    volumes:
+      - ./FE:/app
+      - bts_fe_node_modules:/app/node_modules
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:5173').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
 
 volumes:
   bts_pgdata:
-  # bts_storage:
+  bts_fe_node_modules:

@@ -6,8 +6,8 @@ import tailwindcss from '@tailwindcss/vite';
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, __dirname, 'VITE_');
   const apiProxyTarget =
-    env.VITE_API_PROXY_TARGET ||
     process.env.VITE_API_PROXY_TARGET ||
+    env.VITE_API_PROXY_TARGET ||
     'http://127.0.0.1:8000';
 
   return {
@@ -20,6 +20,10 @@ export default defineConfig(({ mode }) => {
     server: {
       host: '127.0.0.1',
       port: 5173,
+      watch:
+        process.env.VITE_USE_POLLING === 'true'
+          ? { usePolling: true, interval: 300 }
+          : undefined,
       proxy: {
         '/api/v1': {
           target: apiProxyTarget,
