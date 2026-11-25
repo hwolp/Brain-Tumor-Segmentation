@@ -1552,4 +1552,97 @@ describe('P3-FE Patient, Case & MRI Upload Flows', () => {
     });
     expect(screen.getByText('Phiên bản v1')).toBeInTheDocument();
   });
+
+  it('edits mask version note (for both manual and AI versions) on CaseDetailPage', async () => {
+    const user = userEvent.setup();
+    const caseData: CaseDto = {
+      id: 'case-mask-note-1',
+      patient_id: 'pat-1',
+      study_date: '2026-05-12',
+      notes: null,
+      reference_volume_id: 'vol-1',
+      readiness: 'ready',
+      is_inputs_locked: true,
+      can_run_inference: true,
+      blocking_reasons: [],
+      latest_mask_version_id: 'mv-ai-1',
+      created_at: '2026-05-12T00:00:00Z',
+      updated_at: '2026-05-12T00:00:00Z',
+    };
+    const aiVersion = {
+      id: 'mv-ai-1',
+      case_id: 'case-mask-note-1',
+      version_number: 1,
+      source: 'ai' as const,
+      base_version_id: null,
+      reference_volume_id: 'vol-1',
+      file_id: 'file-mv-1',
+      created_by: null,
+      created_by_name: null,
+      model_version_id: 'tda-seg-unet:v1',
+      job_id: 'job-1',
+      note: 'Ghi chú ban đầu',
+      label_voxel_counts: { '1': 10, '2': 20, '4': 5 },
+      label_volumes_mm3: { '1': 10, '2': 20, '4': 5 },
+      sha256: 'sha-ai-1',
+      created_at: '2026-05-12T01:00:00Z',
+    };
+    let patchNotePayload: string | null | undefined;
+
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      const health = createHealthResponse(url);
+      if (health) return health;
+      const method = (init?.method ?? 'GET').toUpperCase();
+
+      if (url.endsWith('/api/v1/cases/case-mask-note-1') && method === 'GET') {
+        return jsonResponse(caseData);
+      }
+      if (url.endsWith('/api/v1/cases/case-mask-note-1/volumes') && method === 'GET') {
+        return jsonResponse([]);
+      }
+      if (url.endsWith('/api/v1/cases/case-mask-note-1/jobs') && method === 'GET') {
+        return jsonResponse({ items: [], total: 0, page: 1, page_size: 20 });
+      }
+      if (url.endsWith('/api/v1/cases/case-mask-note-1/mask-versions') && method === 'GET') {
+        return jsonResponse({
+          items: [aiVersion],
+          total: 1,
+          page: 1,
+          page_size: 20,
+        });
+      }
+      if (url.endsWith('/api/v1/mask-versions/mv-ai-1') && method === 'PATCH') {
+        const body = JSON.parse(String(init?.body ?? '{}')) as {
+          note: string | null;
+        };
+        patchNotePayload = body.note;
+        aiVersion.note = body.note ?? '';
+        return jsonResponse({ ...aiVersion, note: body.note });
+      }
+      return jsonResponse({});
+    });
+
+    renderAppAt(['/doctor/cases/case-mask-note-1']);
+
+    const editBtn = await screen.findByRole('button', {
+      name: 'Sửa ghi chú phiên bản v1',
+    });
+    await user.click(editBtn);
+
+    const dialog = await screen.findByRole('dialog');
+    const textarea = within(dialog).getByLabelText('Ghi chú phiên bản');
+    expect(textarea).toHaveValue('Ghi chú ban đầu');
+
+    await user.clear(textarea);
+    await user.type(textarea, 'Đã kiểm tra vùng lõi u');
+    await user.click(
+      within(dialog).getByRole('button', { name: 'Lưu ghi chú' }),
+    );
+
+    await waitFor(() => {
+      expect(patchNotePayload).toBe('Đã kiểm tra vùng lõi u');
+      expect(screen.getByText('Đã kiểm tra vùng lõi u')).toBeInTheDocument();
+    });
+  });
 });

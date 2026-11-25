@@ -6,6 +6,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Cpu,
+  FlaskConical,
   LayoutDashboard,
   LogOut,
   Menu,
@@ -50,6 +51,7 @@ const ADMIN_NAV_ITEMS: readonly NavItem[] = [
   { to: '/admin', label: 'Tổng quan hệ thống', icon: Activity, end: true },
   { to: '/admin/users', label: 'Tài khoản bác sĩ', icon: UserCog },
   { to: '/admin/jobs', label: 'Quản lý tác vụ AI', icon: Cpu },
+  { to: '/admin/benchmarks', label: 'Kiểm định AI', icon: FlaskConical },
   { to: '/admin/settings', label: 'Cấu hình vận hành', icon: Settings },
   { to: '/admin/audit-events', label: 'Nhật ký quản trị', icon: ShieldCheck },
 ];
@@ -58,6 +60,7 @@ function resolveSectionTitle(role: UserRole, pathname: string): string {
   if (role === 'admin') {
     if (pathname.startsWith('/admin/users')) return 'Tài khoản bác sĩ';
     if (pathname.startsWith('/admin/jobs')) return 'Quản lý tác vụ AI';
+    if (pathname.startsWith('/admin/benchmarks')) return 'Kiểm định AI';
     if (pathname.startsWith('/admin/settings')) return 'Cấu hình vận hành';
     if (pathname.startsWith('/admin/audit-events')) return 'Nhật ký quản trị';
     return 'Tổng quan hệ thống';

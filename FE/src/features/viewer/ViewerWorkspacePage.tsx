@@ -16,6 +16,7 @@ import {
   Paintbrush,
   PanelRightClose,
   PanelRightOpen,
+  Pencil,
   Printer,
   Redo2,
   RotateCcw,
@@ -39,6 +40,7 @@ import {
   fetchAllMaskVersions,
   fetchMaskVersionMetadata,
   saveManualMaskVersion,
+  updateMaskVersionNote,
   type MaskVersionMetadataDto,
 } from '@/shared/api/maskVersions';
 import { getSessionEpoch } from '@/shared/api/client';
@@ -96,6 +98,7 @@ import {
   DirtyExportModal,
   DirtyPrintModal,
   DirtySwitchModal,
+  EditMaskNoteModal,
   MaskConflictModal,
   SaveMaskNoteModal,
 } from './MaskSaveModals';
@@ -252,6 +255,13 @@ export function ViewerWorkspacePage() {
   const [deleteMaskModalOpen, setDeleteMaskModalOpen] = React.useState(false);
   const [isDeletingMask, setIsDeletingMask] = React.useState(false);
   const [deleteMaskError, setDeleteMaskError] = React.useState<{
+    message: string;
+    requestId: string | null;
+  } | null>(null);
+  const [editMaskNoteModalOpen, setEditMaskNoteModalOpen] =
+    React.useState(false);
+  const [isUpdatingMaskNote, setIsUpdatingMaskNote] = React.useState(false);
+  const [editMaskNoteError, setEditMaskNoteError] = React.useState<{
     message: string;
     requestId: string | null;
   } | null>(null);
@@ -2119,6 +2129,64 @@ export function ViewerWorkspacePage() {
     }
   };
 
+  const handleConfirmEditSelectedMaskNote = async (note: string | null) => {
+    const target = selectedVersion;
+    if (!target) return;
+    setIsUpdatingMaskNote(true);
+    setEditMaskNoteError(null);
+    try {
+      const updated = await updateMaskVersionNote(target.id, note, {
+        fixtureMode,
+      });
+      if (localSavedVersionsRef.current.has(updated.id)) {
+        localSavedVersionsRef.current.set(updated.id, updated);
+      }
+      setVersionMetadata(null);
+      queryClient.setQueryData<PaginatedResponse<MaskVersionDto> | null>(
+        maskVersionsQueryKey,
+        (old) =>
+          old
+            ? {
+                ...old,
+                items: old.items.map((item) =>
+                  item.id === updated.id ? updated : item,
+                ),
+              }
+            : old,
+      );
+      queryClient.setQueryData<typeof caseQuery.data>(caseQueryKey, (old) =>
+        old
+          ? {
+              ...old,
+              maskVersions: old.maskVersions.map((item) =>
+                item.id === updated.id ? updated : item,
+              ),
+            }
+          : old,
+      );
+      setEditMaskNoteModalOpen(false);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: caseQueryKey, exact: true }),
+        queryClient.invalidateQueries({
+          queryKey: maskVersionsQueryKey,
+          exact: true,
+        }),
+      ]);
+      pushToast({
+        variant: 'success',
+        title: `Đã cập nhật ghi chú v${updated.version_number}`,
+      });
+    } catch (error) {
+      const normalized = normalizeApiError(error);
+      setEditMaskNoteError({
+        message: normalized.message,
+        requestId: normalized.requestId,
+      });
+    } finally {
+      setIsUpdatingMaskNote(false);
+    }
+  };
+
   if (caseQuery.isError && (!caseQuery.data || isAccessOrNotFoundError)) {
     return (
       <div className="flex flex-col gap-4">
@@ -2757,6 +2825,7 @@ export function ViewerWorkspacePage() {
                     panOffset={panOffset}
                     crosshairVoxel={crosshairVoxel}
                     renderRevision={renderRevision}
+                    fillContainer
                     isFullscreen={isFullscreen}
                     isMaximized={maximizedPaneId === 'pane-original'}
                     onToggleMaximize={() => toggleMaximizePane('pane-original')}
@@ -2800,6 +2869,7 @@ export function ViewerWorkspacePage() {
                   panOffset={panOffset}
                   crosshairVoxel={crosshairVoxel}
                   renderRevision={renderRevision}
+                  fillContainer
                   isFullscreen={isFullscreen}
                   isMaximized={maximizedPaneId === 'pane-axial-editable'}
                   onToggleMaximize={
@@ -2871,6 +2941,7 @@ export function ViewerWorkspacePage() {
                     panOffset={panOffset}
                     crosshairVoxel={crosshairVoxel}
                     renderRevision={renderRevision}
+                    fillContainer
                     isFullscreen={isFullscreen}
                     isMaximized={maximizedPaneId === paneId}
                     onToggleMaximize={() => toggleMaximizePane(paneId)}
@@ -2925,6 +2996,7 @@ export function ViewerWorkspacePage() {
                   panOffset={panOffset}
                   crosshairVoxel={crosshairVoxel}
                   renderRevision={renderRevision}
+                  fillContainer
                   isFullscreen={isFullscreen}
                   isMaximized={maximizedPaneId === 'pane-coronal-readonly'}
                   onToggleMaximize={() =>
@@ -2968,6 +3040,7 @@ export function ViewerWorkspacePage() {
                   panOffset={panOffset}
                   crosshairVoxel={crosshairVoxel}
                   renderRevision={renderRevision}
+                  fillContainer
                   isFullscreen={isFullscreen}
                   isMaximized={maximizedPaneId === 'pane-axial-editable'}
                   onToggleMaximize={() =>
@@ -3012,6 +3085,7 @@ export function ViewerWorkspacePage() {
                   panOffset={panOffset}
                   crosshairVoxel={crosshairVoxel}
                   renderRevision={renderRevision}
+                  fillContainer
                   isFullscreen={isFullscreen}
                   isMaximized={maximizedPaneId === 'pane-sagittal-readonly'}
                   onToggleMaximize={() =>
@@ -3515,11 +3589,34 @@ export function ViewerWorkspacePage() {
                       : `Thủ công · ${selectedVersion.created_by_name ?? 'Bác sĩ'}`}
                   </p>
                   <p>Tạo lúc: {formatDateTimeVN(selectedVersion.created_at)}</p>
-                  {selectedVersion.note && (
-                    <p className="mt-0.5 text-[var(--viewer-text)]">
-                      Ghi chú: {selectedVersion.note}
+                  <div className="mt-1 flex items-start justify-between gap-2">
+                    <p className="min-w-0 flex-1 text-[var(--viewer-text)]">
+                      Ghi chú:{' '}
+                      {selectedVersion.note ? (
+                        selectedVersion.note
+                      ) : (
+                        <span className="italic text-[var(--viewer-text-muted)]">
+                          Chưa có ghi chú
+                        </span>
+                      )}
                     </p>
-                  )}
+                    <button
+                      type="button"
+                      aria-label="Sửa ghi chú phiên bản mask"
+                      title="Sửa ghi chú phiên bản mask đang chọn"
+                      onClick={() => {
+                        setEditMaskNoteError(null);
+                        setEditMaskNoteModalOpen(true);
+                      }}
+                      className={cn(
+                        'inline-flex h-6 shrink-0 cursor-pointer items-center gap-1 rounded border px-1.5 text-[11px] font-medium transition-colors duration-150',
+                        darkOutlineBtnClass,
+                      )}
+                    >
+                      <Pencil className="size-3" aria-hidden="true" />
+                      Sửa ghi chú
+                    </button>
+                  </div>
                   {(selectedVersion.source === 'ai' ||
                     matchedMetadata?.coverage?.note) && (
                     <p className="mt-1 text-amber-300/90">
@@ -3706,6 +3803,25 @@ export function ViewerWorkspacePage() {
             </Alert>
           )}
         </ConfirmDialog>
+      )}
+
+      {selectedVersion && (
+        <EditMaskNoteModal
+          open={editMaskNoteModalOpen}
+          versionNumber={selectedVersion.version_number}
+          initialNote={selectedVersion.note}
+          isSaving={isUpdatingMaskNote}
+          error={editMaskNoteError}
+          onClose={() => {
+            if (!isUpdatingMaskNote) {
+              setEditMaskNoteModalOpen(false);
+              setEditMaskNoteError(null);
+            }
+          }}
+          onConfirmSave={(note) => {
+            void handleConfirmEditSelectedMaskNote(note);
+          }}
+        />
       )}
 
       {savedPrintSummary && (

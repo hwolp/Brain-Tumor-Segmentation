@@ -40,6 +40,7 @@ export interface SliceCanvasPaneProps {
   renderRevision: number;
   isMaximized?: boolean;
   isFullscreen?: boolean;
+  fillContainer?: boolean;
   onToggleMaximize?: () => void;
   onResetView?: () => void;
   onStrokeStart?: (displayX: number, displayY: number) => void;
@@ -141,6 +142,7 @@ export function SliceCanvasPane({
   renderRevision,
   isMaximized = false,
   isFullscreen = false,
+  fillContainer = false,
   onToggleMaximize,
   onResetView,
   onStrokeStart,
@@ -786,7 +788,8 @@ export function SliceCanvasPane({
     <div
       data-testid={testId}
       className={cn(
-        'relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-xl border bg-black transition-colors duration-150 ease-[var(--ease-out)]',
+        'relative flex min-w-0 flex-col overflow-hidden rounded-[var(--radius-inner)] border bg-black transition-colors duration-150 ease-[var(--ease-out)]',
+        fillContainer && 'h-full min-h-0',
         isPaintToolActive
           ? 'border-sky-500/60'
           : editable
@@ -855,7 +858,12 @@ export function SliceCanvasPane({
       {sliceIndex === null ? (
         <div
           ref={viewportRef}
-          className="flex min-h-[300px] flex-1 items-center justify-center p-2 text-center text-sm font-medium text-[var(--viewer-text-muted)] sm:min-h-[360px] lg:min-h-0"
+          className={cn(
+            'flex items-center justify-center p-2 text-center text-sm font-medium text-[var(--viewer-text-muted)]',
+            fillContainer
+              ? 'min-h-[300px] flex-1 sm:min-h-[360px] lg:min-h-0'
+              : 'h-[380px] sm:h-[460px]',
+          )}
         >
           Không có lát
         </div>
@@ -868,9 +876,11 @@ export function SliceCanvasPane({
           onPointerCancel={finishViewportPointerAction}
           onLostPointerCapture={finishViewportPointerAction}
           className={cn(
-            'relative flex flex-1 touch-none select-none items-center justify-center overflow-hidden bg-black p-1.5',
+            'relative flex touch-none select-none items-center justify-center overflow-hidden bg-black p-1.5',
             isDraggingPan ? 'cursor-grabbing' : 'cursor-grab',
-            'min-h-[300px] sm:min-h-[360px] lg:min-h-0',
+            fillContainer
+              ? 'min-h-[300px] flex-1 sm:min-h-[360px] lg:min-h-0'
+              : 'h-[380px] sm:h-[460px]',
           )}
         >
           {/* Nhãn định hướng giải phẫu theo affine */}

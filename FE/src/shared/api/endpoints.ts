@@ -1,13 +1,20 @@
 import { listAdminUsers } from './adminUsers';
 import { apiRequest } from './client';
+import { assertBinaryRequestCurrent, fetchProtectedBinary } from './maskVersions';
 import type {
   AdminAuditEventListParams,
+  AdminBenchmarksListParams,
   AdminJobsListParams,
   AdminUsersListParams,
   PatientsListParams,
 } from './endpointParams';
 import { ApiClientError } from './errors';
 import {
+  createFixtureAdminBenchmark,
+  deleteFixtureAdminBenchmark,
+  getFixtureAdminBenchmarkArtifactBuffer,
+  getFixtureAdminBenchmarkDetail,
+  getFixtureAdminBenchmarks,
   getFixtureAdminJobs,
   getFixtureAdminJobDetail,
   getFixtureAdminOverview,
@@ -25,6 +32,8 @@ import {
   retryFixtureAdminJob,
 } from './fixtures';
 import type {
+  AdminBenchmarkDetailDto,
+  AdminBenchmarkSummaryDto,
   AdminDoctorUserDto,
   AdminJobDto,
   AdminJobDetailDto,
@@ -33,6 +42,8 @@ import type {
   AdminSettingsDto,
   AdminWorkerDto,
   AuditEventDto,
+  BenchmarkArtifactKind,
+  BenchmarkDeletionDto,
   CaseDto,
   InferenceJobDto,
   MaskVersionDto,
@@ -390,4 +401,118 @@ export async function fetchAdminAuditEvents(
       signal: options.signal,
     },
   );
+}
+
+export async function fetchAdminWorkers(options: {
+  signal?: AbortSignal;
+  fixtureMode?: boolean;
+}): Promise<AdminWorkerDto[]> {
+  if (options.fixtureMode) {
+    return getFixtureAdminOverview().workers;
+  }
+  return apiRequest<AdminWorkerDto[]>('/admin/workers', {
+    method: 'GET',
+    signal: options.signal,
+  });
+}
+
+export async function fetchAdminBenchmarks(
+  params: AdminBenchmarksListParams,
+  options: { signal?: AbortSignal; fixtureMode?: boolean },
+): Promise<PaginatedResponse<AdminBenchmarkSummaryDto>> {
+  if (options.fixtureMode) {
+    return getFixtureAdminBenchmarks(params);
+  }
+  const qs = buildSearchParams({
+    q: params.q,
+    state: params.state === 'all' ? undefined : params.state,
+    worker_id: params.workerId,
+    page: params.page,
+    page_size: params.pageSize,
+  });
+  return apiRequest<PaginatedResponse<AdminBenchmarkSummaryDto>>(
+    `/admin/benchmarks${qs}`,
+    {
+      method: 'GET',
+      signal: options.signal,
+    },
+  );
+}
+
+export async function fetchAdminBenchmarkDetail(
+  benchmarkId: string,
+  options: { signal?: AbortSignal; fixtureMode?: boolean },
+): Promise<AdminBenchmarkDetailDto> {
+  if (options.fixtureMode) {
+    return getFixtureAdminBenchmarkDetail(benchmarkId);
+  }
+  return apiRequest<AdminBenchmarkDetailDto>(
+    `/admin/benchmarks/${encodeURIComponent(benchmarkId)}`,
+    {
+      method: 'GET',
+      signal: options.signal,
+    },
+  );
+}
+
+export async function createAdminBenchmark(
+  payload: {
+    title: string;
+    targetWorkerId: string;
+    notes?: string;
+    flair: File;
+    t1ce: File;
+    gtMask: File;
+  },
+  options: { fixtureMode?: boolean } = {},
+): Promise<AdminBenchmarkDetailDto> {
+  if (options.fixtureMode) {
+    return createFixtureAdminBenchmark(payload);
+  }
+  const form = new FormData();
+  form.append('title', payload.title.trim());
+  form.append('target_worker_id', payload.targetWorkerId);
+  if (payload.notes?.trim()) {
+    form.append('notes', payload.notes.trim());
+  }
+  form.append('flair', payload.flair);
+  form.append('t1ce', payload.t1ce);
+  form.append('gt_mask', payload.gtMask);
+
+  return apiRequest<AdminBenchmarkDetailDto>('/admin/benchmarks', {
+    method: 'POST',
+    body: form,
+  });
+}
+
+export async function deleteAdminBenchmark(
+  benchmarkId: string,
+  options: { fixtureMode?: boolean } = {},
+): Promise<BenchmarkDeletionDto> {
+  if (options.fixtureMode) {
+    return deleteFixtureAdminBenchmark(benchmarkId);
+  }
+  return apiRequest<BenchmarkDeletionDto>(
+    `/admin/benchmarks/${encodeURIComponent(benchmarkId)}`,
+    {
+      method: 'DELETE',
+    },
+  );
+}
+
+export async function downloadAdminBenchmarkArtifactBuffer(
+  benchmarkId: string,
+  artifact: BenchmarkArtifactKind,
+  options: { signal?: AbortSignal; fixtureMode?: boolean } = {},
+): Promise<ArrayBuffer> {
+  if (options.fixtureMode) {
+    return getFixtureAdminBenchmarkArtifactBuffer(benchmarkId, artifact);
+  }
+  const { response, requestEpoch } = await fetchProtectedBinary(
+    `/admin/benchmarks/${encodeURIComponent(benchmarkId)}/files/${encodeURIComponent(artifact)}`,
+    { signal: options.signal },
+  );
+  const bytes = await response.arrayBuffer();
+  assertBinaryRequestCurrent(requestEpoch, options.signal);
+  return bytes;
 }

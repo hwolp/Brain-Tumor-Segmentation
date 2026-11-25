@@ -1,10 +1,13 @@
 import type {
   AdminAuditEventListParams,
+  AdminBenchmarksListParams,
   AdminJobsListParams,
   AdminUsersListParams,
   PatientsListParams,
 } from './endpointParams';
 import type {
+  AdminBenchmarkDetailDto,
+  AdminBenchmarkSummaryDto,
   AdminDoctorUserDto,
   AdminJobDto,
   AdminJobDetailDto,
@@ -13,6 +16,8 @@ import type {
   AdminSettingsDto,
   AdminWorkerDto,
   AuditEventDto,
+  BenchmarkArtifactKind,
+  BenchmarkDeletionDto,
   CaseCreateRequest,
   CaseDto,
   CaseUpdateRequest,
@@ -1215,4 +1220,291 @@ export function deleteFixtureMaskVersion(
     files_cleaned: stillUsed ? 0 : 1,
     message: 'Đã xóa phiên bản mask thủ công.',
   };
+}
+
+export function updateFixtureMaskVersionNote(
+  maskVersionId: string,
+  note: string | null,
+): MaskVersionDto {
+  const target = FIXTURE_MASK_VERSIONS.find((m) => m.id === maskVersionId);
+  if (!target) {
+    throw new ApiClientError({
+      status: 404,
+      code: 'mask_version_not_found',
+      requestId: 'req-fixture-mask-404',
+    });
+  }
+  const trimmed = note !== null ? note.trim() : '';
+  if (trimmed.length > 2000) {
+    throw new ApiClientError({
+      status: 422,
+      code: 'validation_error',
+      requestId: 'req-fixture-mask-note-422',
+    });
+  }
+  target.note = trimmed ? trimmed : null;
+  return { ...target };
+}
+
+const FIXTURE_BENCHMARKS: AdminBenchmarkDetailDto[] = [
+  {
+    id: '90000000-0000-4000-8000-000000000001',
+    title: 'BraTS20_Training_001 - Worker GPU',
+    notes: 'Kiểm định đối chiếu với nhãn chuẩn bác sĩ.',
+    target_worker_id: 'worker-local-01',
+    executed_worker_id: 'worker-local-01',
+    worker_device_type: 'GPU',
+    model_version_id: 'tda-segunet-v1.0',
+    state: 'succeeded',
+    stage: 'done',
+    completed_slices: 155,
+    total_slices: 155,
+    error_code: null,
+    mean_dice_brats: 0.9125,
+    wt_dice: 0.9412,
+    tc_dice: 0.9088,
+    et_dice: 0.8875,
+    inference_duration_ms: 4820,
+    created_at: '2026-05-15T09:15:00Z',
+    started_at: '2026-05-15T09:15:02Z',
+    finished_at: '2026-05-15T09:15:07Z',
+    shape: [240, 240, 155],
+    spacing_mm: [1, 1, 1],
+    affine: [
+      [1, 0, 0, -120],
+      [0, 1, 0, -120],
+      [0, 0, 1, -78],
+      [0, 0, 0, 1],
+    ],
+    metrics: {
+      voxel_volume_mm3: 1,
+      mean_dice_brats: 0.9125,
+      best_slice_z: 77,
+      regions: {
+        WT: {
+          dice: 0.9412,
+          iou: 0.8889,
+          precision: 0.952,
+          recall: 0.9306,
+          gt_voxels: 42000,
+          pred_voxels: 41056,
+          tp_voxels: 39085,
+          fp_voxels: 1971,
+          fn_voxels: 2915,
+          gt_volume_ml: 42.0,
+          pred_volume_ml: 41.056,
+          volume_diff_ml: -0.944,
+          both_empty: false,
+        },
+        TC: {
+          dice: 0.9088,
+          iou: 0.8328,
+          precision: 0.915,
+          recall: 0.9027,
+          gt_voxels: 18500,
+          pred_voxels: 18251,
+          tp_voxels: 16700,
+          fp_voxels: 1551,
+          fn_voxels: 1800,
+          gt_volume_ml: 18.5,
+          pred_volume_ml: 18.251,
+          volume_diff_ml: -0.249,
+          both_empty: false,
+        },
+        ET: {
+          dice: 0.8875,
+          iou: 0.7977,
+          precision: 0.892,
+          recall: 0.883,
+          gt_voxels: 9100,
+          pred_voxels: 9008,
+          tp_voxels: 8035,
+          fp_voxels: 973,
+          fn_voxels: 1065,
+          gt_volume_ml: 9.1,
+          pred_volume_ml: 9.008,
+          volume_diff_ml: -0.092,
+          both_empty: false,
+        },
+      },
+      labels: {
+        '1': {
+          dice: 0.872,
+          iou: 0.773,
+          precision: 0.88,
+          recall: 0.864,
+          gt_voxels: 9400,
+          pred_voxels: 9243,
+          tp_voxels: 8121,
+          fp_voxels: 1122,
+          fn_voxels: 1279,
+          gt_volume_ml: 9.4,
+          pred_volume_ml: 9.243,
+          volume_diff_ml: -0.157,
+          both_empty: false,
+        },
+        '2': {
+          dice: 0.925,
+          iou: 0.8605,
+          precision: 0.931,
+          recall: 0.919,
+          gt_voxels: 23500,
+          pred_voxels: 22805,
+          tp_voxels: 21596,
+          fp_voxels: 1209,
+          fn_voxels: 1904,
+          gt_volume_ml: 23.5,
+          pred_volume_ml: 22.805,
+          volume_diff_ml: -0.695,
+          both_empty: false,
+        },
+        '4': {
+          dice: 0.8875,
+          iou: 0.7977,
+          precision: 0.892,
+          recall: 0.883,
+          gt_voxels: 9100,
+          pred_voxels: 9008,
+          tp_voxels: 8035,
+          fp_voxels: 973,
+          fn_voxels: 1065,
+          gt_volume_ml: 9.1,
+          pred_volume_ml: 9.008,
+          volume_diff_ml: -0.092,
+          both_empty: false,
+        },
+      },
+      crop_capture: {
+        gt_wt_voxels: 42000,
+        inside_crop_voxels: 41890,
+        outside_crop_voxels: 110,
+        capture_recall: 0.9974,
+      },
+    },
+    coverage: null,
+    has_pred_mask: true,
+    created_by_username: 'adminops',
+  },
+];
+
+export function getFixtureAdminBenchmarks(
+  params: AdminBenchmarksListParams,
+): PaginatedResponse<AdminBenchmarkSummaryDto> {
+  const q = (params.q ?? '').trim().toLowerCase();
+  const filtered = FIXTURE_BENCHMARKS.filter((item) => {
+    if (params.state && params.state !== 'all' && item.state !== params.state) {
+      return false;
+    }
+    if (params.workerId && item.target_worker_id !== params.workerId) {
+      return false;
+    }
+    if (q) {
+      return (
+        item.title.toLowerCase().includes(q) ||
+        item.target_worker_id.toLowerCase().includes(q) ||
+        item.id.toLowerCase().includes(q)
+      );
+    }
+    return true;
+  });
+  const start = (params.page - 1) * params.pageSize;
+  return {
+    items: filtered.slice(start, start + params.pageSize),
+    total: filtered.length,
+    page: params.page,
+    page_size: params.pageSize,
+  };
+}
+
+export function getFixtureAdminBenchmarkDetail(
+  benchmarkId: string,
+): AdminBenchmarkDetailDto {
+  const found = FIXTURE_BENCHMARKS.find((item) => item.id === benchmarkId);
+  if (!found) {
+    throw new ApiClientError({
+      status: 404,
+      code: 'benchmark_not_found',
+      requestId: 'req-fixture-bench-404',
+    });
+  }
+  return { ...found };
+}
+
+export function createFixtureAdminBenchmark(payload: {
+  title: string;
+  targetWorkerId: string;
+  notes?: string;
+}): AdminBenchmarkDetailDto {
+  const id = nextFixtureUuid('90000000');
+  const created: AdminBenchmarkDetailDto = {
+    id,
+    title: payload.title.trim(),
+    notes: payload.notes?.trim() ? payload.notes.trim() : null,
+    target_worker_id: payload.targetWorkerId,
+    executed_worker_id: null,
+    worker_device_type: null,
+    model_version_id: null,
+    state: 'queued',
+    stage: 'queued',
+    completed_slices: null,
+    total_slices: null,
+    error_code: null,
+    mean_dice_brats: null,
+    wt_dice: null,
+    tc_dice: null,
+    et_dice: null,
+    inference_duration_ms: null,
+    created_at: new Date().toISOString(),
+    started_at: null,
+    finished_at: null,
+    shape: [240, 240, 155],
+    spacing_mm: [1, 1, 1],
+    affine: [
+      [1, 0, 0, -120],
+      [0, 1, 0, -120],
+      [0, 0, 1, -78],
+      [0, 0, 0, 1],
+    ],
+    metrics: null,
+    coverage: null,
+    has_pred_mask: false,
+    created_by_username: 'adminops',
+  };
+  FIXTURE_BENCHMARKS.unshift(created);
+  return created;
+}
+
+export function deleteFixtureAdminBenchmark(
+  benchmarkId: string,
+): BenchmarkDeletionDto {
+  const idx = FIXTURE_BENCHMARKS.findIndex((item) => item.id === benchmarkId);
+  if (idx === -1) {
+    throw new ApiClientError({
+      status: 404,
+      code: 'benchmark_not_found',
+      requestId: 'req-fixture-bench-404',
+    });
+  }
+  if (FIXTURE_BENCHMARKS[idx]!.state === 'running') {
+    throw new ApiClientError({
+      status: 409,
+      code: 'benchmark_running',
+      requestId: 'req-fixture-bench-409',
+    });
+  }
+  FIXTURE_BENCHMARKS.splice(idx, 1);
+  return {
+    resource_type: 'admin_benchmark',
+    resource_id: benchmarkId,
+    status: 'deleted',
+    files_cleaned: 5,
+    message: 'Đã xóa lượt kiểm định và dọn các tệp lưu trữ liên quan.',
+  };
+}
+
+export function getFixtureAdminBenchmarkArtifactBuffer(
+  _benchmarkId: string,
+  _artifact: BenchmarkArtifactKind,
+): ArrayBuffer {
+  return new ArrayBuffer(0);
 }

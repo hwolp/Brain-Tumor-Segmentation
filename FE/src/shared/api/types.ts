@@ -234,3 +234,86 @@ export interface AuditEventDto {
   outcome: 'success' | 'failure';
   request_id: string;
 }
+
+export type BenchmarkArtifactKind = 'flair' | 't1ce' | 'gt_mask' | 'pred_mask';
+
+export interface BenchmarkRegionMetricsDto {
+  dice: number;
+  iou: number;
+  precision: number;
+  recall: number;
+  gt_voxels: number;
+  pred_voxels: number;
+  tp_voxels: number;
+  fp_voxels: number;
+  fn_voxels: number;
+  gt_volume_ml: number;
+  pred_volume_ml: number;
+  volume_diff_ml: number;
+  both_empty: boolean;
+}
+
+export interface BenchmarkCropCaptureDto {
+  gt_wt_voxels: number;
+  inside_crop_voxels: number;
+  outside_crop_voxels: number;
+  capture_recall: number;
+}
+
+export interface BenchmarkMetricsDto {
+  voxel_volume_mm3: number;
+  mean_dice_brats: number;
+  best_slice_z: number;
+  regions: {
+    WT: BenchmarkRegionMetricsDto;
+    TC: BenchmarkRegionMetricsDto;
+    ET: BenchmarkRegionMetricsDto;
+  };
+  labels: {
+    '1': BenchmarkRegionMetricsDto;
+    '2': BenchmarkRegionMetricsDto;
+    '4': BenchmarkRegionMetricsDto;
+  };
+  crop_capture: BenchmarkCropCaptureDto | null;
+}
+
+export interface AdminBenchmarkSummaryDto {
+  id: string;
+  title: string;
+  notes: string | null;
+  target_worker_id: string;
+  executed_worker_id: string | null;
+  worker_device_type: string | null;
+  model_version_id: string | null;
+  state: JobState;
+  stage: JobStage;
+  completed_slices: number | null;
+  total_slices: number | null;
+  error_code: string | null;
+  mean_dice_brats: number | null;
+  wt_dice: number | null;
+  tc_dice: number | null;
+  et_dice: number | null;
+  inference_duration_ms: number | null;
+  created_at: string;
+  started_at: string | null;
+  finished_at: string | null;
+}
+
+export interface AdminBenchmarkDetailDto extends AdminBenchmarkSummaryDto {
+  shape: [number, number, number];
+  spacing_mm: [number, number, number];
+  affine: number[][];
+  metrics: BenchmarkMetricsDto | null;
+  coverage: Record<string, unknown> | null;
+  has_pred_mask: boolean;
+  created_by_username: string;
+}
+
+export interface BenchmarkDeletionDto {
+  resource_type: 'admin_benchmark';
+  resource_id: string;
+  status: 'deleted';
+  files_cleaned: number;
+  message: string;
+}

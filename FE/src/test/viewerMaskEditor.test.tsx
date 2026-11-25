@@ -194,6 +194,18 @@ async function mockLiveViewerApi(options: {
         202,
       );
     }
+    if (delMaskMatch && method === 'PATCH') {
+      const targetId = decodeURIComponent(delMaskMatch[1]!);
+      const target = versionDtos.find((item) => item.id === targetId);
+      if (!target) {
+        return json({ error: { code: 'mask_version_not_found' } }, 404);
+      }
+      const body = JSON.parse(String(init?.body ?? '{}')) as {
+        note?: string | null;
+      };
+      target.note = body.note?.trim() ? body.note.trim() : null;
+      return json({ ...target });
+    }
     const fileMatch = path.match(/\/files\/([^/]+)\/content$/);
     if (fileMatch && method === 'GET') {
       const bytes = fileBytes.get(decodeURIComponent(fileMatch[1]!));
@@ -2013,5 +2025,51 @@ describe('P4 ViewerWorkspacePage Interactive Flows (QA-MASK-02/04/05)', () => {
     expect(
       screen.queryByRole('button', { name: 'Xóa phiên bản mask thủ công' }),
     ).not.toBeInTheDocument();
+  });
+
+  it('allows editing mask version note directly inside ViewerWorkspacePage inspector', async () => {
+    const user = userEvent.setup();
+    const geometry: VolumeGeometry = {
+      shape: [8, 8, 8],
+      spacingMm: [1, 1, 1],
+      affine: [
+        [1, 0, 0, 0],
+        [0, 1, 0, 0],
+        [0, 0, 1, 0],
+        [0, 0, 0, 1],
+      ],
+    };
+
+    useAuthStore.setState({
+      user: FIXTURE_USERS.doctor,
+      accessToken: 'live-token',
+      fixtureMode: false,
+      reauthRequired: false,
+    });
+
+    await mockLiveViewerApi({
+      caseId: 'case-viewer-note-1',
+      geometry,
+      versions: [{ id: 'ver-ai-1', version_number: 1, source: 'ai' }],
+    });
+
+    renderViewer('case-viewer-note-1');
+
+    const editNoteBtn = await screen.findByRole('button', {
+      name: 'Sửa ghi chú phiên bản mask',
+    });
+    await user.click(editNoteBtn);
+
+    const modal = await screen.findByRole('dialog');
+    const textarea = modal.querySelector('textarea') as HTMLTextAreaElement;
+    expect(textarea).not.toBeNull();
+    await user.type(textarea, 'Ghi chú mới từ Viewer');
+    await user.click(screen.getByRole('button', { name: 'Lưu ghi chú' }));
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(/Ghi chú:\s*Ghi chú mới từ Viewer/),
+      ).toBeInTheDocument();
+    });
   });
 });

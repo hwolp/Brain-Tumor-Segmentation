@@ -88,10 +88,7 @@ if not "%ENV_MODEL_CHECKPOINT_PATH:REPLACE_WITH_=%"=="%ENV_MODEL_CHECKPOINT_PATH
 if not "%ENV_WORKER_TOKEN:REPLACE_WITH_=%"=="%ENV_WORKER_TOKEN%" set "START_WORKER=0"
 
 if "%START_WORKER%"=="1" (
-    set "ENV_WORKER_API_BASE_URL=http://127.0.0.1:%API_PORT%"
-    if "%ENV_MODEL_MANIFEST_PATH%"=="" set "ENV_MODEL_MANIFEST_PATH=worker/manifest.json"
-    if "%ENV_WORKER_DEVICE%"=="" set "ENV_WORKER_DEVICE=cpu"
-    start "BTS AI Worker" cmd /k "cd /d ""%BE_DIR%"" && set ""WORKER_API_BASE_URL=%ENV_WORKER_API_BASE_URL%"" && set ""WORKER_TOKEN=%ENV_WORKER_TOKEN%"" && set ""WORKER_ID=local-worker-1"" && set ""MODEL_MANIFEST_PATH=%ENV_MODEL_MANIFEST_PATH%"" && set ""MODEL_CHECKPOINT_PATH=%ENV_MODEL_CHECKPOINT_PATH%"" && set ""WORKER_DEVICE=%ENV_WORKER_DEVICE%"" && ""%WORKER_PYTHON%"" -m worker.service"
+    start "BTS AI Worker" cmd /k ""%ROOT_DIR%\start-worker.bat""
 ) else (
     echo [INFO] Bo qua AI Worker (chua cau hinh WORKER_TOKEN / MODEL_CHECKPOINT_PATH trong BE\.env).
 )

@@ -490,6 +490,8 @@ class InferenceJobService:
     def claim_job(
         self, *, worker_id: str, device_type: str, model_version_id: str | None
     ) -> WorkerClaimOut | None:
+        from app.services.admin_benchmark_service import AdminBenchmarkService
+
         now = datetime.now(UTC)
         worker = self._upsert_worker(
             worker_id=worker_id,
@@ -498,113 +500,122 @@ class InferenceJobService:
             now=now,
         )
         worker.current_job_id = None
-        if not model_version_id:
-            self.db.commit()
-            return None
-
-        while True:
-            job = self.db.scalar(
-                select(InferenceJob)
-                .join(Case, Case.id == InferenceJob.case_id)
-                .join(Patient, Patient.id == Case.patient_id)
-                .where(
-                    InferenceJob.state == "queued",
-                    InferenceJob.model_version_id == model_version_id,
-                    Case.deleting_at.is_(None),
-                    Case.deleted_at.is_(None),
-                    Patient.deleting_at.is_(None),
-                    Patient.deleted_at.is_(None),
-                )
-                .order_by(InferenceJob.created_at, InferenceJob.id)
-                .with_for_update(of=InferenceJob, skip_locked=True)
-                .execution_options(populate_existing=True)
-                .limit(1)
-            )
-            if job is None:
-                self.db.commit()
-                return None
-
-            volumes = self.volumes.list_active_for_case(job.case_id)
-            required = {
-                v.modality: v
-                for v in volumes
-                if v.modality in {"flair", "t1ce"} and v.validation_status == "valid"
-            }
-            _, can_run, _ = compute_case_inference_status(
-                volumes,
-                manifest_path=_manifest_path(self.settings),
-            )
-            if set(required) != {"flair", "t1ce"} or not can_run:
-                job.state = "failed"
-                job.error_code = "input_changed"
-                job.finished_at = now
-                self.db.flush()
-                continue
-
-            model = self.db.get(ModelVersion, job.model_version_id)
-            if model is None or not model.verified:
-                job.state = "failed"
-                job.error_code = "model_unavailable"
-                job.finished_at = now
-                self.db.flush()
-                continue
-
-            file_rows = {
-                row.id: row
-                for row in self.files.list_by_ids([v.file_id for v in required.values()])
-            }
-            if any(
-                v.file_id not in file_rows or file_rows[v.file_id].state != "committed"
-                for v in required.values()
-            ):
-                job.state = "failed"
-                job.error_code = "input_changed"
-                job.finished_at = now
-                self.db.flush()
-                continue
-
-            lease_token = secrets.token_urlsafe(32)
-            attempt_number = job.attempt_count + 1
-            attempt = JobAttempt(
-                job_id=job.id,
-                attempt_number=attempt_number,
-                worker_id=worker_id,
-                state="running",
-                lease_token_hash=_hash_token(lease_token),
-                lease_expires_at=now + timedelta(seconds=LEASE_SECONDS),
-                stage="loading",
-            )
-            self.db.add(attempt)
-            job.state = "running"
-            job.stage = "loading"
-            job.attempt_count = attempt_number
-            job.started_at = job.started_at or now
-            job.error_code = None
-            worker.current_job_id = job.id
-            self.db.flush()
-            result = WorkerClaimOut(
-                job_id=job.id,
-                attempt_id=attempt.id,
-                attempt_number=attempt_number,
-                lease_token=lease_token,
-                lease_expires_at=attempt.lease_expires_at,
-                model_version_id=job.model_version_id,
-                manifest=model.manifest_json,
-                files=[
-                    WorkerInputFile(
-                        volume_id=required[m].id,
-                        file_id=required[m].file_id,
-                        modality=m,
-                        sha256=required[m].sha256,
-                        extension="nii.gz"
-                        if file_rows[required[m].file_id].media_type == "application/gzip"
-                        else "nii",
+        if model_version_id:
+            while True:
+                job = self.db.scalar(
+                    select(InferenceJob)
+                    .join(Case, Case.id == InferenceJob.case_id)
+                    .join(Patient, Patient.id == Case.patient_id)
+                    .where(
+                        InferenceJob.state == "queued",
+                        InferenceJob.model_version_id == model_version_id,
+                        Case.deleting_at.is_(None),
+                        Case.deleted_at.is_(None),
+                        Patient.deleting_at.is_(None),
+                        Patient.deleted_at.is_(None),
                     )
-                    for m in ("flair", "t1ce")
-                ],
-            )
-            self.db.commit()
-            return result
+                    .order_by(InferenceJob.created_at, InferenceJob.id)
+                    .with_for_update(of=InferenceJob, skip_locked=True)
+                    .execution_options(populate_existing=True)
+                    .limit(1)
+                )
+                if job is None:
+                    break
+
+                volumes = self.volumes.list_active_for_case(job.case_id)
+                required = {
+                    v.modality: v
+                    for v in volumes
+                    if v.modality in {"flair", "t1ce"} and v.validation_status == "valid"
+                }
+                _, can_run, _ = compute_case_inference_status(
+                    volumes,
+                    manifest_path=_manifest_path(self.settings),
+                )
+                if set(required) != {"flair", "t1ce"} or not can_run:
+                    job.state = "failed"
+                    job.error_code = "input_changed"
+                    job.finished_at = now
+                    self.db.flush()
+                    continue
+
+                model = self.db.get(ModelVersion, job.model_version_id)
+                if model is None or not model.verified:
+                    job.state = "failed"
+                    job.error_code = "model_unavailable"
+                    job.finished_at = now
+                    self.db.flush()
+                    continue
+
+                file_rows = {
+                    row.id: row
+                    for row in self.files.list_by_ids([v.file_id for v in required.values()])
+                }
+                if any(
+                    v.file_id not in file_rows or file_rows[v.file_id].state != "committed"
+                    for v in required.values()
+                ):
+                    job.state = "failed"
+                    job.error_code = "input_changed"
+                    job.finished_at = now
+                    self.db.flush()
+                    continue
+
+                lease_token = secrets.token_urlsafe(32)
+                attempt_number = job.attempt_count + 1
+                attempt = JobAttempt(
+                    job_id=job.id,
+                    attempt_number=attempt_number,
+                    worker_id=worker_id,
+                    state="running",
+                    lease_token_hash=_hash_token(lease_token),
+                    lease_expires_at=now + timedelta(seconds=LEASE_SECONDS),
+                    stage="loading",
+                )
+                self.db.add(attempt)
+                job.state = "running"
+                job.stage = "loading"
+                job.attempt_count = attempt_number
+                job.started_at = job.started_at or now
+                job.error_code = None
+                worker.current_job_id = job.id
+                self.db.flush()
+                result = WorkerClaimOut(
+                    job_id=job.id,
+                    attempt_id=attempt.id,
+                    attempt_number=attempt_number,
+                    lease_token=lease_token,
+                    lease_expires_at=attempt.lease_expires_at,
+                    model_version_id=job.model_version_id,
+                    manifest=model.manifest_json,
+                    files=[
+                        WorkerInputFile(
+                            volume_id=required[m].id,
+                            file_id=required[m].file_id,
+                            modality=m,
+                            sha256=required[m].sha256,
+                            extension="nii.gz"
+                            if file_rows[required[m].file_id].media_type == "application/gzip"
+                            else "nii",
+                        )
+                        for m in ("flair", "t1ce")
+                    ],
+                )
+                self.db.commit()
+                return result
+
+        benchmark_claim = AdminBenchmarkService(
+            self.db, self.storage, self.settings
+        ).claim_for_worker(
+            worker_id=worker_id,
+            device_type=device_type,
+            model_version_id=model_version_id,
+            worker=worker,
+        )
+        if benchmark_claim is not None:
+            return benchmark_claim
+        self.db.commit()
+        return None
 
     def _active_attempt(
         self,
@@ -679,6 +690,22 @@ class InferenceJobService:
                 "validation_error",
                 "Số lát cắt hoàn thành không được vượt quá tổng số lát cắt.",
             )
+        if self.db.get(InferenceJob, job_id) is None:
+            from app.services.admin_benchmark_service import AdminBenchmarkService
+
+            benchmark_out = AdminBenchmarkService(
+                self.db, self.storage, self.settings
+            ).heartbeat(
+                job_id=job_id,
+                worker_id=worker_id,
+                attempt_id=attempt_id,
+                lease_token=lease_token,
+                stage=stage,
+                completed_slices=completed_slices,
+                total_slices=total_slices,
+            )
+            if benchmark_out is not None:
+                return benchmark_out
         job, attempt = self._active_attempt(
             job_id=job_id, attempt_id=attempt_id, lease_token=lease_token, worker_id=worker_id
         )
@@ -706,6 +733,20 @@ class InferenceJobService:
         worker_id: str,
         lease_token: str,
     ) -> StoredFile:
+        if self.db.get(InferenceJob, job_id) is None:
+            from app.services.admin_benchmark_service import AdminBenchmarkService
+
+            bench_file = AdminBenchmarkService(
+                self.db, self.storage, self.settings
+            ).authorize_input_file(
+                file_id=file_id,
+                job_id=job_id,
+                attempt_id=attempt_id,
+                worker_id=worker_id,
+                lease_token=lease_token,
+            )
+            if bench_file is not None:
+                return bench_file
         job, _ = self._active_attempt(
             job_id=job_id,
             attempt_id=attempt_id,
@@ -791,6 +832,26 @@ class InferenceJobService:
         metadata_file: BinaryIO,
         request_id: str,
     ) -> InferenceJobOut:
+        if self.db.get(InferenceJob, job_id) is None:
+            from app.services.admin_benchmark_service import AdminBenchmarkService
+
+            benchmark_out = await AdminBenchmarkService(
+                self.db, self.storage, self.settings
+            ).complete(
+                job_id=job_id,
+                worker_id=worker_id,
+                attempt_id=attempt_id,
+                lease_token=lease_token,
+                mask_file=mask_file,
+                mask_filename=mask_filename,
+                coverage_file=coverage_file,
+                metadata_file=metadata_file,
+                request_id=request_id,
+            )
+            if benchmark_out is not None:
+                return benchmark_out
+            _raise(404, "job_not_found", "Không tìm thấy tác vụ AI.")
+
         # Stage artifacts before taking database locks; parsing NIfTI can take several seconds.
         incoming = None
         coverage_stage = None
@@ -1135,6 +1196,19 @@ class InferenceJobService:
         error_code: str,
         request_id: str,
     ) -> InferenceJobOut:
+        if self.db.get(InferenceJob, job_id) is None:
+            from app.services.admin_benchmark_service import AdminBenchmarkService
+
+            benchmark_out = AdminBenchmarkService(self.db, self.storage, self.settings).fail(
+                job_id=job_id,
+                worker_id=worker_id,
+                attempt_id=attempt_id,
+                lease_token=lease_token,
+                error_code=error_code,
+                request_id=request_id,
+            )
+            if benchmark_out is not None:
+                return benchmark_out
         if error_code not in _SAFE_ERROR_CODES:
             error_code = "worker_error"
         job, attempt = self._active_attempt(
@@ -1534,5 +1608,8 @@ def reap_expired_attempts(db: Session) -> int:
         if worker is not None and worker.current_job_id == attempt.job_id:
             worker.current_job_id = None
         count += 1
+    from app.services.admin_benchmark_service import AdminBenchmarkService
+
+    count += AdminBenchmarkService.reap_expired_runs(db, now)
     db.commit()
     return count

@@ -24,7 +24,10 @@ import {
   normalizeApiError,
   normalizeErrorCode,
 } from '@/shared/api/errors';
-import { deleteMaskVersion } from '@/shared/api/maskVersions';
+import {
+  deleteMaskVersion,
+  updateMaskVersionNote,
+} from '@/shared/api/maskVersions';
 import {
   MAX_UPLOAD_BYTES,
   deleteCase,
@@ -54,6 +57,7 @@ import {
   useToast,
 } from '@/shared/ui';
 import { CaseFormModal } from '@/features/patients/CaseFormModal';
+import { EditMaskNoteModal } from '@/features/viewer/MaskSaveModals';
 import {
   formatJobErrorReason,
   formatJobStage,
@@ -138,6 +142,14 @@ export function CaseDetailPage() {
   const [isDeletingMaskVersion, setIsDeletingMaskVersion] =
     React.useState(false);
   const [deleteMaskVersionError, setDeleteMaskVersionError] = React.useState<{
+    message: string;
+    requestId: string | null;
+  } | null>(null);
+
+  const [editingMaskNoteVersion, setEditingMaskNoteVersion] =
+    React.useState<MaskVersionDto | null>(null);
+  const [isUpdatingMaskNote, setIsUpdatingMaskNote] = React.useState(false);
+  const [editMaskNoteError, setEditMaskNoteError] = React.useState<{
     message: string;
     requestId: string | null;
   } | null>(null);
@@ -844,6 +856,32 @@ export function CaseDetailPage() {
     }
   };
 
+  const handleConfirmEditMaskNote = async (note: string | null) => {
+    if (!editingMaskNoteVersion) return;
+    setIsUpdatingMaskNote(true);
+    setEditMaskNoteError(null);
+    const verNumber = editingMaskNoteVersion.version_number;
+    try {
+      await updateMaskVersionNote(editingMaskNoteVersion.id, note, {
+        fixtureMode,
+      });
+      setEditingMaskNoteVersion(null);
+      await invalidateCaseRelatedQueries(data?.caseData.patient_id);
+      pushToast({
+        variant: 'success',
+        title: `Đã cập nhật ghi chú v${verNumber}`,
+      });
+    } catch (error) {
+      const normalized = normalizeApiError(error);
+      setEditMaskNoteError({
+        message: normalized.message,
+        requestId: normalized.requestId,
+      });
+    } finally {
+      setIsUpdatingMaskNote(false);
+    }
+  };
+
   const handleUpdateCase = async (payload: CaseCreateRequest) => {
     setIsUpdatingCase(true);
     try {
@@ -1381,6 +1419,19 @@ export function CaseDetailPage() {
                               Mở v{ver.version_number}
                             </Link>
                           )}
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            aria-label={`Sửa ghi chú phiên bản v${ver.version_number}`}
+                            onClick={() => {
+                              setEditMaskNoteError(null);
+                              setEditingMaskNoteVersion(ver);
+                            }}
+                          >
+                            <Pencil className="size-3.5" aria-hidden="true" />
+                            Sửa ghi chú
+                          </Button>
                           {ver.source === 'manual' && (
                             <Button
                               type="button"
@@ -1589,6 +1640,23 @@ export function CaseDetailPage() {
               </Alert>
             )}
           </ConfirmDialog>
+
+          <EditMaskNoteModal
+            open={Boolean(editingMaskNoteVersion)}
+            versionNumber={editingMaskNoteVersion?.version_number ?? 1}
+            initialNote={editingMaskNoteVersion?.note}
+            isSaving={isUpdatingMaskNote}
+            error={editMaskNoteError}
+            onClose={() => {
+              if (!isUpdatingMaskNote) {
+                setEditingMaskNoteVersion(null);
+                setEditMaskNoteError(null);
+              }
+            }}
+            onConfirmSave={(note) => {
+              void handleConfirmEditMaskNote(note);
+            }}
+          />
         </>
       )}
     </div>

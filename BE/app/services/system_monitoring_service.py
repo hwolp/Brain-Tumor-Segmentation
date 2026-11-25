@@ -17,6 +17,7 @@ from app.models.stored_file import StoredFile
 from app.models.user import User
 from app.schemas.health import LivenessResponse, ReadinessChecks, ReadinessResponse
 from app.schemas.jobs import AdminModelOut, AdminOverviewOut, AdminWorkerOut
+from app.services.admin_benchmark_service import list_active_benchmark_ids
 from app.services.inference_job_service import _read_manifest
 from app.services.system_setting_service import SystemSettingService
 
@@ -146,6 +147,7 @@ class SystemMonitoringService:
                     )
                 ).all()
             )
+            running_job_ids.update(list_active_benchmark_ids(self.db, candidate_job_ids))
         out: list[AdminWorkerOut] = []
         for row in rows:
             hb_utc = _as_utc(row.last_heartbeat_at)

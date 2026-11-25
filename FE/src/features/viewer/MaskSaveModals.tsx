@@ -300,3 +300,107 @@ export function DirtyPrintModal({
     />
   );
 }
+
+export interface EditMaskNoteModalProps {
+  open: boolean;
+  versionNumber: number;
+  initialNote: string | null | undefined;
+  isSaving: boolean;
+  error?: { message: string; requestId?: string | null } | null;
+  onClose: () => void;
+  onConfirmSave: (note: string | null) => void;
+}
+
+export function EditMaskNoteModal({
+  open,
+  versionNumber,
+  initialNote,
+  isSaving,
+  error,
+  onClose,
+  onConfirmSave,
+}: EditMaskNoteModalProps) {
+  const [note, setNote] = React.useState('');
+
+  React.useEffect(() => {
+    if (open) {
+      setNote(initialNote ?? '');
+    }
+  }, [open, initialNote]);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (isSaving) return;
+    const trimmed = note.slice(0, 2000).trim();
+    onConfirmSave(trimmed ? trimmed : null);
+  };
+
+  return (
+    <Modal
+      open={open}
+      onClose={isSaving ? () => {} : onClose}
+      isSubmitting={isSaving}
+      title={`Sửa ghi chú phiên bản v${versionNumber}`}
+      description="Cập nhật ghi chú chuyên môn cho phiên bản mask mà không làm thay đổi dữ liệu khối ảnh hoặc thống kê thể tích."
+      footer={
+        <>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={isSaving}
+            onClick={onClose}
+          >
+            Hủy
+          </Button>
+          <Button
+            type="submit"
+            form="mask-edit-note-form"
+            variant="primary"
+            disabled={isSaving}
+          >
+            {isSaving ? 'Đang lưu...' : 'Lưu ghi chú'}
+          </Button>
+        </>
+      }
+    >
+      <form
+        id="mask-edit-note-form"
+        onSubmit={handleSubmit}
+        className="flex flex-col gap-4"
+      >
+        <div className="flex flex-col gap-1.5">
+          <div className="flex items-center justify-between">
+            <label
+              htmlFor="mask-edit-note-input"
+              className="text-sm font-medium text-[var(--text-primary)]"
+            >
+              Ghi chú phiên bản
+            </label>
+            <span className="font-mono text-xs text-[var(--text-secondary)] tabular-nums">
+              {note.length} / 2000
+            </span>
+          </div>
+          <Textarea
+            id="mask-edit-note-input"
+            rows={4}
+            maxLength={2000}
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            placeholder="Nhập ghi chú cho phiên bản mask (để trống nếu muốn xóa ghi chú)"
+          />
+        </div>
+        {error && (
+          <Alert
+            variant="error"
+            title="Không thể cập nhật ghi chú"
+            description={error.message}
+          >
+            {error.requestId && (
+              <span className="sr-only">Mã tham chiếu: {error.requestId}</span>
+            )}
+          </Alert>
+        )}
+      </form>
+    </Modal>
+  );
+}

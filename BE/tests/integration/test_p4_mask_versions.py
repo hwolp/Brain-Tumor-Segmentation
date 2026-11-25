@@ -974,3 +974,160 @@ def test_backup_restore_verify_ignores_soft_deleted_manual_mask_version(
     )
     assert verify_summary["status"] == "ok"
     assert verify_summary["verified_mask_versions"] == 0
+
+
+def test_update_mask_version_note_supports_ai_and_manual_enforces_validation_and_rbac(
+    p4_client: TestClient,
+    p4_db_session: Session,
+    test_settings: Settings,
+) -> None:
+    doc_a = _seed_user(p4_db_session, username="doc_p4_note_a", display_name="Dr. Note A")
+    _seed_user(p4_db_session, username="doc_p4_note_b", display_name="Dr. Note B")
+    _seed_user(p4_db_session, username="admin_p4_note", role="admin")
+
+    tok_a = _login(p4_client, "doc_p4_note_a")
+    tok_b = _login(p4_client, "doc_p4_note_b")
+    tok_admin = _login(p4_client, "admin_p4_note")
+
+    case_id = _create_patient_and_case(p4_client, tok_a, code="PAT-P4-NOTE-01")
+    volume = _upload_volume(p4_client, tok_a, case_id, "t1ce", shape=(4, 4, 4))
+
+    ai_v1, _, _ = _seed_ai_mask_version(
+        p4_db_session,
+        settings=test_settings,
+        doctor_id=doc_a.id,
+        case_id=uuid.UUID(case_id),
+        reference_volume_id=uuid.UUID(volume["id"]),
+        version_number=1,
+    )
+
+    mask_arr = np.zeros((4, 4, 4), dtype=np.uint8)
+    mask_arr[1, 1, 1] = 2
+    mask_bytes = _make_nifti_gz_bytes(mask_arr)
+
+    r_v2 = p4_client.post(
+        f"/api/v1/cases/{case_id}/mask-versions",
+        headers={**_auth_header(tok_a), "Idempotency-Key": str(uuid.uuid4())},
+        data={
+            "base_version_id": str(ai_v1.id),
+            "reference_volume_id": volume["id"],
+            "note": "Initial note",
+        },
+        files={"mask": ("mask.nii.gz", mask_bytes, "application/gzip")},
+    )
+    assert r_v2.status_code == 201, r_v2.text
+    v2 = r_v2.json()
+
+    # Edit manual v2 note
+    r_patch_v2 = p4_client.patch(
+        f"/api/v1/mask-versions/{v2['id']}",
+        headers=_auth_header(tok_a),
+        json={"note": "  Updated manual note  "},
+    )
+    assert r_patch_v2.status_code == 200, r_patch_v2.text
+    updated_v2 = r_patch_v2.json()
+    assert updated_v2["note"] == "Updated manual note"
+    assert updated_v2["sha256"] == v2["sha256"]
+    assert updated_v2["label_voxel_counts"] == v2["label_voxel_counts"]
+
+    # Confirm persisted in GET detail and list
+    r_get_v2 = p4_client.get(
+        f"/api/v1/mask-versions/{v2['id']}", headers=_auth_header(tok_a)
+    )
+    assert r_get_v2.status_code == 200
+    assert r_get_v2.json()["note"] == "Updated manual note"
+
+    r_list = p4_client.get(
+        f"/api/v1/cases/{case_id}/mask-versions", headers=_auth_header(tok_a)
+    )
+    assert r_list.status_code == 200
+    assert r_list.json()["items"][0]["note"] == "Updated manual note"
+
+    # Zero-PII audit event check
+    p4_db_session.expire_all()
+    audit = p4_db_session.query(AuditEvent).filter_by(
+        action="mask_version_note_updated",
+        resource_id=v2["id"],
+    ).one_or_none()
+    assert audit is not None
+    assert audit.safe_diff is not None
+    assert audit.safe_diff.get("has_note") is True
+    assert "Updated manual note" not in json.dumps(audit.safe_diff)
+
+    # Edit AI v1 note
+    r_patch_ai = p4_client.patch(
+        f"/api/v1/mask-versions/{ai_v1.id}",
+        headers=_auth_header(tok_a),
+        json={"note": "AI review note"},
+    )
+    assert r_patch_ai.status_code == 200, r_patch_ai.text
+    assert r_patch_ai.json()["note"] == "AI review note"
+
+    # Clear note with whitespace and explicit null
+    r_clear_ws = p4_client.patch(
+        f"/api/v1/mask-versions/{v2['id']}",
+        headers=_auth_header(tok_a),
+        json={"note": "   "},
+    )
+    assert r_clear_ws.status_code == 200
+    assert r_clear_ws.json()["note"] is None
+
+    r_clear_null = p4_client.patch(
+        f"/api/v1/mask-versions/{ai_v1.id}",
+        headers=_auth_header(tok_a),
+        json={"note": None},
+    )
+    assert r_clear_null.status_code == 200
+    assert r_clear_null.json()["note"] is None
+
+    # Validation: > 2000 chars and extra fields
+    assert (
+        p4_client.patch(
+            f"/api/v1/mask-versions/{v2['id']}",
+            headers=_auth_header(tok_a),
+            json={"note": "x" * 2001},
+        ).status_code
+        == 422
+    )
+    assert (
+        p4_client.patch(
+            f"/api/v1/mask-versions/{v2['id']}",
+            headers=_auth_header(tok_a),
+            json={"note": "ok", "source": "ai"},
+        ).status_code
+        == 422
+    )
+
+    # RBAC & owner boundaries
+    assert (
+        p4_client.patch(
+            f"/api/v1/mask-versions/{v2['id']}",
+            headers=_auth_header(tok_b),
+            json={"note": "Hijack"},
+        ).status_code
+        == 404
+    )
+    assert (
+        p4_client.patch(
+            f"/api/v1/mask-versions/{v2['id']}",
+            headers=_auth_header(tok_admin),
+            json={"note": "Admin edit"},
+        ).status_code
+        == 403
+    )
+
+    # Cannot update note on soft-deleted mask version
+    assert (
+        p4_client.delete(
+            f"/api/v1/mask-versions/{v2['id']}", headers=_auth_header(tok_a)
+        ).status_code
+        == 202
+    )
+    assert (
+        p4_client.patch(
+            f"/api/v1/mask-versions/{v2['id']}",
+            headers=_auth_header(tok_a),
+            json={"note": "After delete"},
+        ).status_code
+        == 404
+    )

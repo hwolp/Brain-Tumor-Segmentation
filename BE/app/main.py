@@ -16,6 +16,7 @@ from starlette.datastructures import MutableHeaders
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from app.api.v1 import (
+    admin_benchmarks_router,
     admin_operations_router,
     admin_users_router,
     auth_router,
@@ -42,6 +43,7 @@ logger = logging.getLogger(__name__)
 _MULTIPART_UPLOAD_PATH_RE = re.compile(
     r"^/api/v1/(?:cases/[^/]+/(?:volumes|mask-versions)|internal/jobs/[^/]+/complete)$"
 )
+_ADMIN_BENCHMARK_UPLOAD_PATH = "/api/v1/admin/benchmarks"
 
 
 class _IngressPayloadTooLarge(BaseException):
@@ -51,9 +53,14 @@ class _IngressPayloadTooLarge(BaseException):
 class MultipartIngressLimitMiddleware:
     """Reject oversized multipart upload requests before FastAPI spools request.form()."""
 
-    def __init__(self, app: ASGIApp, *, max_bytes: int) -> None:
+    def __init__(
+        self, app: ASGIApp, *, max_bytes: int, benchmark_max_bytes: int | None = None
+    ) -> None:
         self.app = app
         self.max_bytes = max_bytes
+        self.benchmark_max_bytes = (
+            benchmark_max_bytes if benchmark_max_bytes is not None else max_bytes * 3
+        )
 
     async def _send_413(self, scope: Scope, send: Send) -> None:
         state = scope.get("state", {})
@@ -82,11 +89,15 @@ class MultipartIngressLimitMiddleware:
         await send({"type": "http.response.body", "body": body, "more_body": False})
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        if (
-            scope["type"] != "http"
-            or scope.get("method") != "POST"
-            or not _MULTIPART_UPLOAD_PATH_RE.fullmatch(scope.get("path", ""))
-        ):
+        if scope["type"] != "http" or scope.get("method") != "POST":
+            await self.app(scope, receive, send)
+            return
+        path = scope.get("path", "")
+        if path == _ADMIN_BENCHMARK_UPLOAD_PATH:
+            effective_max_bytes = self.benchmark_max_bytes
+        elif _MULTIPART_UPLOAD_PATH_RE.fullmatch(path):
+            effective_max_bytes = self.max_bytes
+        else:
             await self.app(scope, receive, send)
             return
 
@@ -96,7 +107,7 @@ class MultipartIngressLimitMiddleware:
                     content_length = int(value.decode("latin-1").strip())
                 except ValueError:
                     content_length = -1
-                if content_length > self.max_bytes:
+                if content_length > effective_max_bytes:
                     await self._send_413(scope, send)
                     return
 
@@ -109,7 +120,7 @@ class MultipartIngressLimitMiddleware:
             message = await receive()
             if message["type"] == "http.request":
                 bytes_received += len(message.get("body", b""))
-                if bytes_received > self.max_bytes:
+                if bytes_received > effective_max_bytes:
                     limit_exceeded = True
                     raise _IngressPayloadTooLarge()
             return message
@@ -263,6 +274,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         max_bytes=(
             resolved_settings.MAX_UPLOAD_BYTES + resolved_settings.MAX_MULTIPART_OVERHEAD_BYTES
         ),
+        benchmark_max_bytes=(
+            resolved_settings.MAX_UPLOAD_BYTES * 3
+            + resolved_settings.MAX_MULTIPART_OVERHEAD_BYTES
+        ),
     )
     application.add_middleware(
         CORSMiddleware,
@@ -284,6 +299,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     application.include_router(mask_versions_router)
     application.include_router(files_router)
     application.include_router(admin_operations_router)
+    application.include_router(admin_benchmarks_router)
     application.include_router(jobs_router)
     application.include_router(internal_worker_router)
 

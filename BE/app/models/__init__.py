@@ -1,5 +1,6 @@
 """ORM models registry."""
 
+from app.models.admin_benchmark import AdminBenchmarkRun
 from app.models.audit_event import AuditEvent
 from app.models.base import POSTGRES_NAMING_CONVENTION, Base
 from app.models.case import Case, CaseCreateIdempotencyKey
@@ -19,6 +20,7 @@ from app.models.user import User
 from app.models.volume import Volume
 
 __all__ = [
+    "AdminBenchmarkRun",
     "AuditEvent",
     "Base",
     "Case",

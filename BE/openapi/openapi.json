@@ -1,6 +1,519 @@
 {
   "components": {
     "schemas": {
+      "AdminBenchmarkDetailOut": {
+        "properties": {
+          "affine": {
+            "items": {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            "title": "Affine",
+            "type": "array"
+          },
+          "completed_slices": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed Slices"
+          },
+          "coverage": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Coverage"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by_username": {
+            "title": "Created By Username",
+            "type": "string"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code"
+          },
+          "et_dice": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Et Dice"
+          },
+          "executed_worker_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Executed Worker Id"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "has_pred_mask": {
+            "title": "Has Pred Mask",
+            "type": "boolean"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "inference_duration_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Inference Duration Ms"
+          },
+          "mean_dice_brats": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mean Dice Brats"
+          },
+          "metrics": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BenchmarkMetricsOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "model_version_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Version Id"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "shape": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Shape",
+            "type": "array"
+          },
+          "spacing_mm": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Spacing Mm",
+            "type": "array"
+          },
+          "stage": {
+            "enum": [
+              "queued",
+              "loading",
+              "preprocessing",
+              "inference",
+              "reconstructing",
+              "saving",
+              "done"
+            ],
+            "title": "Stage",
+            "type": "string"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "state": {
+            "enum": [
+              "queued",
+              "running",
+              "succeeded",
+              "failed",
+              "cancelled"
+            ],
+            "title": "State",
+            "type": "string"
+          },
+          "target_worker_id": {
+            "title": "Target Worker Id",
+            "type": "string"
+          },
+          "tc_dice": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tc Dice"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "total_slices": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Slices"
+          },
+          "worker_device_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Worker Device Type"
+          },
+          "wt_dice": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wt Dice"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "notes",
+          "target_worker_id",
+          "executed_worker_id",
+          "worker_device_type",
+          "model_version_id",
+          "state",
+          "stage",
+          "completed_slices",
+          "total_slices",
+          "error_code",
+          "mean_dice_brats",
+          "wt_dice",
+          "tc_dice",
+          "et_dice",
+          "inference_duration_ms",
+          "created_at",
+          "started_at",
+          "finished_at",
+          "shape",
+          "spacing_mm",
+          "affine",
+          "metrics",
+          "coverage",
+          "has_pred_mask",
+          "created_by_username"
+        ],
+        "title": "AdminBenchmarkDetailOut",
+        "type": "object"
+      },
+      "AdminBenchmarkSummaryOut": {
+        "properties": {
+          "completed_slices": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed Slices"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code"
+          },
+          "et_dice": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Et Dice"
+          },
+          "executed_worker_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Executed Worker Id"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "inference_duration_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Inference Duration Ms"
+          },
+          "mean_dice_brats": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mean Dice Brats"
+          },
+          "model_version_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Version Id"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "stage": {
+            "enum": [
+              "queued",
+              "loading",
+              "preprocessing",
+              "inference",
+              "reconstructing",
+              "saving",
+              "done"
+            ],
+            "title": "Stage",
+            "type": "string"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "state": {
+            "enum": [
+              "queued",
+              "running",
+              "succeeded",
+              "failed",
+              "cancelled"
+            ],
+            "title": "State",
+            "type": "string"
+          },
+          "target_worker_id": {
+            "title": "Target Worker Id",
+            "type": "string"
+          },
+          "tc_dice": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tc Dice"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "total_slices": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Slices"
+          },
+          "worker_device_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Worker Device Type"
+          },
+          "wt_dice": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wt Dice"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "notes",
+          "target_worker_id",
+          "executed_worker_id",
+          "worker_device_type",
+          "model_version_id",
+          "state",
+          "stage",
+          "completed_slices",
+          "total_slices",
+          "error_code",
+          "mean_dice_brats",
+          "wt_dice",
+          "tc_dice",
+          "et_dice",
+          "inference_duration_ms",
+          "created_at",
+          "started_at",
+          "finished_at"
+        ],
+        "title": "AdminBenchmarkSummaryOut",
+        "type": "object"
+      },
       "AdminCreateDoctorRequest": {
         "additionalProperties": false,
         "description": "Create doctor account payload.",
@@ -724,6 +1237,206 @@
         "title": "AuthTokenResponse",
         "type": "object"
       },
+      "BenchmarkCropCaptureOut": {
+        "properties": {
+          "capture_recall": {
+            "title": "Capture Recall",
+            "type": "number"
+          },
+          "gt_wt_voxels": {
+            "title": "Gt Wt Voxels",
+            "type": "integer"
+          },
+          "inside_crop_voxels": {
+            "title": "Inside Crop Voxels",
+            "type": "integer"
+          },
+          "outside_crop_voxels": {
+            "title": "Outside Crop Voxels",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "gt_wt_voxels",
+          "inside_crop_voxels",
+          "outside_crop_voxels",
+          "capture_recall"
+        ],
+        "title": "BenchmarkCropCaptureOut",
+        "type": "object"
+      },
+      "BenchmarkDeletionOut": {
+        "properties": {
+          "files_cleaned": {
+            "default": 0,
+            "title": "Files Cleaned",
+            "type": "integer"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "resource_id": {
+            "format": "uuid",
+            "title": "Resource Id",
+            "type": "string"
+          },
+          "resource_type": {
+            "const": "admin_benchmark",
+            "default": "admin_benchmark",
+            "title": "Resource Type",
+            "type": "string"
+          },
+          "status": {
+            "const": "deleted",
+            "default": "deleted",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "resource_id",
+          "message"
+        ],
+        "title": "BenchmarkDeletionOut",
+        "type": "object"
+      },
+      "BenchmarkMetricsOut": {
+        "properties": {
+          "best_slice_z": {
+            "title": "Best Slice Z",
+            "type": "integer"
+          },
+          "crop_capture": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BenchmarkCropCaptureOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "labels": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/BenchmarkRegionMetricsOut"
+            },
+            "propertyNames": {
+              "enum": [
+                "1",
+                "2",
+                "4"
+              ]
+            },
+            "title": "Labels",
+            "type": "object"
+          },
+          "mean_dice_brats": {
+            "title": "Mean Dice Brats",
+            "type": "number"
+          },
+          "regions": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/BenchmarkRegionMetricsOut"
+            },
+            "propertyNames": {
+              "enum": [
+                "WT",
+                "TC",
+                "ET"
+              ]
+            },
+            "title": "Regions",
+            "type": "object"
+          },
+          "voxel_volume_mm3": {
+            "title": "Voxel Volume Mm3",
+            "type": "number"
+          }
+        },
+        "required": [
+          "voxel_volume_mm3",
+          "mean_dice_brats",
+          "best_slice_z",
+          "regions",
+          "labels"
+        ],
+        "title": "BenchmarkMetricsOut",
+        "type": "object"
+      },
+      "BenchmarkRegionMetricsOut": {
+        "properties": {
+          "both_empty": {
+            "title": "Both Empty",
+            "type": "boolean"
+          },
+          "dice": {
+            "title": "Dice",
+            "type": "number"
+          },
+          "fn_voxels": {
+            "title": "Fn Voxels",
+            "type": "integer"
+          },
+          "fp_voxels": {
+            "title": "Fp Voxels",
+            "type": "integer"
+          },
+          "gt_volume_ml": {
+            "title": "Gt Volume Ml",
+            "type": "number"
+          },
+          "gt_voxels": {
+            "title": "Gt Voxels",
+            "type": "integer"
+          },
+          "iou": {
+            "title": "Iou",
+            "type": "number"
+          },
+          "precision": {
+            "title": "Precision",
+            "type": "number"
+          },
+          "pred_volume_ml": {
+            "title": "Pred Volume Ml",
+            "type": "number"
+          },
+          "pred_voxels": {
+            "title": "Pred Voxels",
+            "type": "integer"
+          },
+          "recall": {
+            "title": "Recall",
+            "type": "number"
+          },
+          "tp_voxels": {
+            "title": "Tp Voxels",
+            "type": "integer"
+          },
+          "volume_diff_ml": {
+            "title": "Volume Diff Ml",
+            "type": "number"
+          }
+        },
+        "required": [
+          "dice",
+          "iou",
+          "precision",
+          "recall",
+          "gt_voxels",
+          "pred_voxels",
+          "tp_voxels",
+          "fp_voxels",
+          "fn_voxels",
+          "gt_volume_ml",
+          "pred_volume_ml",
+          "volume_diff_ml",
+          "both_empty"
+        ],
+        "title": "BenchmarkRegionMetricsOut",
+        "type": "object"
+      },
       "Body_complete_job_api_v1_internal_jobs__job_id__complete_post": {
         "properties": {
           "coverage": {
@@ -748,6 +1461,58 @@
           "metadata"
         ],
         "title": "Body_complete_job_api_v1_internal_jobs__job_id__complete_post",
+        "type": "object"
+      },
+      "Body_create_benchmark_api_v1_admin_benchmarks_post": {
+        "properties": {
+          "flair": {
+            "contentMediaType": "application/octet-stream",
+            "title": "Flair",
+            "type": "string"
+          },
+          "gt_mask": {
+            "contentMediaType": "application/octet-stream",
+            "title": "Gt Mask",
+            "type": "string"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "t1ce": {
+            "contentMediaType": "application/octet-stream",
+            "title": "T1Ce",
+            "type": "string"
+          },
+          "target_worker_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Target Worker Id",
+            "type": "string"
+          },
+          "title": {
+            "maxLength": 160,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "title",
+          "target_worker_id",
+          "flair",
+          "t1ce",
+          "gt_mask"
+        ],
+        "title": "Body_create_benchmark_api_v1_admin_benchmarks_post",
         "type": "object"
       },
       "Body_save_manual_mask_version_api_v1_cases__case_id__mask_versions_post": {
@@ -1792,6 +2557,25 @@
         "title": "MaskStatisticsOut",
         "type": "object"
       },
+      "MaskVersionNoteUpdateRequest": {
+        "additionalProperties": false,
+        "description": "Request body for updating the clinical/technical note of a mask version.",
+        "properties": {
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "title": "MaskVersionNoteUpdateRequest",
+        "type": "object"
+      },
       "MaskVersionOut": {
         "description": "Public representation of an immutable segmentation mask version.",
         "properties": {
@@ -1966,6 +2750,41 @@
           "created_at"
         ],
         "title": "MaskVersionOut",
+        "type": "object"
+      },
+      "PaginatedResponse_AdminBenchmarkSummaryOut_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/AdminBenchmarkSummaryOut"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "minimum": 1.0,
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_size": {
+            "maximum": 100.0,
+            "minimum": 1.0,
+            "title": "Page Size",
+            "type": "integer"
+          },
+          "total": {
+            "minimum": 0.0,
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "page_size"
+        ],
+        "title": "PaginatedResponse[AdminBenchmarkSummaryOut]",
         "type": "object"
       },
       "PaginatedResponse_AdminDoctorUserOut_": {
@@ -3176,6 +3995,523 @@
         "summary": "List Audit Events",
         "tags": [
           "admin operations"
+        ]
+      }
+    },
+    "/api/v1/admin/benchmarks": {
+      "get": {
+        "operationId": "list_benchmarks_api_v1_admin_benchmarks_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 128,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            }
+          },
+          {
+            "in": "query",
+            "name": "state",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "queued",
+                    "running",
+                    "succeeded",
+                    "failed",
+                    "cancelled"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "State"
+            }
+          },
+          {
+            "in": "query",
+            "name": "worker_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 128,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Worker Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginatedResponse_AdminBenchmarkSummaryOut_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Administrator role required"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Benchmark or artifact not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "State conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid NIfTI input or validation error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Benchmarks",
+        "tags": [
+          "admin benchmarks"
+        ]
+      },
+      "post": {
+        "operationId": "create_benchmark_api_v1_admin_benchmarks_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_create_benchmark_api_v1_admin_benchmarks_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminBenchmarkDetailOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Administrator role required"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Benchmark or artifact not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "State conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid NIfTI input or validation error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Benchmark",
+        "tags": [
+          "admin benchmarks"
+        ]
+      }
+    },
+    "/api/v1/admin/benchmarks/{benchmark_id}": {
+      "delete": {
+        "operationId": "delete_benchmark_api_v1_admin_benchmarks__benchmark_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "benchmark_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Benchmark Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BenchmarkDeletionOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Administrator role required"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Benchmark or artifact not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "State conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid NIfTI input or validation error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Benchmark",
+        "tags": [
+          "admin benchmarks"
+        ]
+      },
+      "get": {
+        "operationId": "get_benchmark_detail_api_v1_admin_benchmarks__benchmark_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "benchmark_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Benchmark Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminBenchmarkDetailOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Administrator role required"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Benchmark or artifact not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "State conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid NIfTI input or validation error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Benchmark Detail",
+        "tags": [
+          "admin benchmarks"
+        ]
+      }
+    },
+    "/api/v1/admin/benchmarks/{benchmark_id}/files/{artifact}": {
+      "get": {
+        "operationId": "download_benchmark_artifact_api_v1_admin_benchmarks__benchmark_id__files__artifact__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "benchmark_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Benchmark Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "artifact",
+            "required": true,
+            "schema": {
+              "enum": [
+                "flair",
+                "t1ce",
+                "gt_mask",
+                "pred_mask"
+              ],
+              "title": "Artifact",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Administrator role required"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Benchmark or artifact not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "State conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid NIfTI input or validation error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Download Benchmark Artifact",
+        "tags": [
+          "admin benchmarks"
         ]
       }
     },
@@ -7132,6 +8468,123 @@
           }
         ],
         "summary": "Get Mask Version",
+        "tags": [
+          "mask-versions"
+        ]
+      },
+      "patch": {
+        "description": "Update the note of an active doctor-owned mask version.",
+        "operationId": "update_mask_version_note_api_v1_mask_versions__mask_version_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "mask_version_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Mask Version Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MaskVersionNoteUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MaskVersionOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden or password change required"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Resource not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Payload or quota too large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal server error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Mask Version Note",
         "tags": [
           "mask-versions"
         ]

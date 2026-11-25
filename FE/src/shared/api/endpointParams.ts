@@ -23,3 +23,11 @@ export interface AdminAuditEventListParams {
   page: number;
   pageSize: number;
 }
+
+export interface AdminBenchmarksListParams {
+  q?: string;
+  state?: string;
+  workerId?: string;
+  page: number;
+  pageSize: number;
+}

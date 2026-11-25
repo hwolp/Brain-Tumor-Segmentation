@@ -6,7 +6,7 @@ import uuid
 from datetime import date
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, field_validator
 
 from app.schemas.common import UTCDatetime
 
@@ -36,6 +36,26 @@ class MaskVersionOut(BaseModel):
     composite_volumes_mm3: dict[str, float] | None
     sha256: str
     created_at: UTCDatetime
+
+
+class MaskVersionNoteUpdateRequest(BaseModel):
+    """Request body for updating the clinical/technical note of a mask version."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    note: str | None = None
+
+    @field_validator("note")
+    @classmethod
+    def _normalize_note(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        stripped = value.strip()
+        if not stripped:
+            return None
+        if len(stripped) > 2000:
+            raise ValueError("Ghi chú phiên bản mask không được vượt quá 2000 ký tự.")
+        return stripped
 
 
 class MaskGeometryOut(BaseModel):

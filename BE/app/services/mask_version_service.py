@@ -347,9 +347,10 @@ def validate_and_canonicalize_mask(
 
                 max_tile_elems = 1_048_576
                 sx, sy, sz = shape
-                z_step = max(1, min(sz, max_tile_elems))
-                y_step = max(1, min(sy, max(1, max_tile_elems // z_step)))
-                x_step = max(1, min(sx, max(1, max_tile_elems // (y_step * z_step))))
+                # Walk Fortran-contiguous X-first slabs so 3D reads stay sequential on bind-mounts.
+                x_step = max(1, min(sx, max_tile_elems))
+                y_step = max(1, min(sy, max(1, max_tile_elems // x_step)))
+                z_step = max(1, min(sz, max(1, max_tile_elems // (x_step * y_step))))
 
                 for z0 in range(0, sz, z_step):
                     z1 = min(sz, z0 + z_step)
@@ -1273,3 +1274,86 @@ class MaskVersionService:
                 else "Đã đánh dấu xóa phiên bản mask thủ công và đang dọn tệp lưu trữ."
             ),
         )
+
+    def update_mask_version_note(
+        self,
+        *,
+        doctor_id: uuid.UUID,
+        mask_version_id: uuid.UUID,
+        note: str | None,
+        request_id: str,
+        ip_address: str,
+    ) -> MaskVersionOut:
+        """Update the note of an active doctor-owned mask version without mutating mask data."""
+        probed = self.mask_versions.get_by_id_for_owner(mask_version_id, doctor_id)
+        if probed is None:
+            raise AppError(
+                status_code=404,
+                code="mask_version_not_found",
+                message="Không tìm thấy phiên bản mask.",
+            )
+        _, case_probe, author_name = probed
+
+        locked_case = self.cases.get_active_for_owner_for_update(case_probe.id, doctor_id)
+        if locked_case is None:
+            raise AppError(
+                status_code=404,
+                code="case_not_found",
+                message="Không tìm thấy ca chụp.",
+            )
+
+        mv = self.db.scalar(
+            select(MaskVersion)
+            .where(
+                MaskVersion.id == mask_version_id,
+                MaskVersion.case_id == locked_case.id,
+                MaskVersion.deleted_at.is_(None),
+            )
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        if mv is None:
+            raise AppError(
+                status_code=404,
+                code="mask_version_not_found",
+                message="Không tìm thấy phiên bản mask.",
+            )
+
+        normalized_note = note.strip() if note is not None else None
+        if normalized_note == "":
+            normalized_note = None
+        if normalized_note is not None and len(normalized_note) > 2000:
+            raise AppError(
+                status_code=422,
+                code="validation_error",
+                message="Ghi chú phiên bản mask không được vượt quá 2000 ký tự.",
+                details=[
+                    {
+                        "field": "note",
+                        "reason": "String should have at most 2000 characters",
+                        "type": "string_too_long",
+                    }
+                ],
+            )
+
+        if mv.note != normalized_note:
+            mv.note = normalized_note
+            self.audits.record_event(
+                actor_type="user",
+                actor_id=doctor_id,
+                action="mask_version_note_updated",
+                resource_type="mask_version",
+                resource_id=str(mv.id),
+                outcome="success",
+                request_id=request_id,
+                ip_address=ip_address,
+                safe_diff={
+                    "case_id": str(locked_case.id),
+                    "version_number": mv.version_number,
+                    "source": mv.source,
+                    "has_note": normalized_note is not None,
+                },
+            )
+            self.db.commit()
+
+        return self._to_out(mv, author_name)

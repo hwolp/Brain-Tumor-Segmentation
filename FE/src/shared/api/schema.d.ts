@@ -41,6 +41,59 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/benchmarks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Benchmarks */
+        get: operations["list_benchmarks_api_v1_admin_benchmarks_get"];
+        put?: never;
+        /** Create Benchmark */
+        post: operations["create_benchmark_api_v1_admin_benchmarks_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/benchmarks/{benchmark_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Benchmark Detail */
+        get: operations["get_benchmark_detail_api_v1_admin_benchmarks__benchmark_id__get"];
+        put?: never;
+        post?: never;
+        /** Delete Benchmark */
+        delete: operations["delete_benchmark_api_v1_admin_benchmarks__benchmark_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/benchmarks/{benchmark_id}/files/{artifact}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Download Benchmark Artifact */
+        get: operations["download_benchmark_artifact_api_v1_admin_benchmarks__benchmark_id__files__artifact__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/jobs": {
         parameters: {
             query?: never;
@@ -696,7 +749,11 @@ export interface paths {
         delete: operations["delete_mask_version_api_v1_mask_versions__mask_version_id__delete"];
         options?: never;
         head?: never;
-        patch?: never;
+        /**
+         * Update Mask Version Note
+         * @description Update the note of an active doctor-owned mask version.
+         */
+        patch: operations["update_mask_version_note_api_v1_mask_versions__mask_version_id__patch"];
         trace?: never;
     };
     "/api/v1/mask-versions/{mask_version_id}/export": {
@@ -836,6 +893,131 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AdminBenchmarkDetailOut */
+        AdminBenchmarkDetailOut: {
+            /** Affine */
+            affine: number[][];
+            /** Completed Slices */
+            completed_slices: number | null;
+            /** Coverage */
+            coverage: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Created By Username */
+            created_by_username: string;
+            /** Error Code */
+            error_code: string | null;
+            /** Et Dice */
+            et_dice: number | null;
+            /** Executed Worker Id */
+            executed_worker_id: string | null;
+            /** Finished At */
+            finished_at: string | null;
+            /** Has Pred Mask */
+            has_pred_mask: boolean;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Inference Duration Ms */
+            inference_duration_ms: number | null;
+            /** Mean Dice Brats */
+            mean_dice_brats: number | null;
+            metrics: components["schemas"]["BenchmarkMetricsOut"] | null;
+            /** Model Version Id */
+            model_version_id: string | null;
+            /** Notes */
+            notes: string | null;
+            /** Shape */
+            shape: number[];
+            /** Spacing Mm */
+            spacing_mm: number[];
+            /**
+             * Stage
+             * @enum {string}
+             */
+            stage: "queued" | "loading" | "preprocessing" | "inference" | "reconstructing" | "saving" | "done";
+            /** Started At */
+            started_at: string | null;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "queued" | "running" | "succeeded" | "failed" | "cancelled";
+            /** Target Worker Id */
+            target_worker_id: string;
+            /** Tc Dice */
+            tc_dice: number | null;
+            /** Title */
+            title: string;
+            /** Total Slices */
+            total_slices: number | null;
+            /** Worker Device Type */
+            worker_device_type: string | null;
+            /** Wt Dice */
+            wt_dice: number | null;
+        };
+        /** AdminBenchmarkSummaryOut */
+        AdminBenchmarkSummaryOut: {
+            /** Completed Slices */
+            completed_slices: number | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Error Code */
+            error_code: string | null;
+            /** Et Dice */
+            et_dice: number | null;
+            /** Executed Worker Id */
+            executed_worker_id: string | null;
+            /** Finished At */
+            finished_at: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Inference Duration Ms */
+            inference_duration_ms: number | null;
+            /** Mean Dice Brats */
+            mean_dice_brats: number | null;
+            /** Model Version Id */
+            model_version_id: string | null;
+            /** Notes */
+            notes: string | null;
+            /**
+             * Stage
+             * @enum {string}
+             */
+            stage: "queued" | "loading" | "preprocessing" | "inference" | "reconstructing" | "saving" | "done";
+            /** Started At */
+            started_at: string | null;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "queued" | "running" | "succeeded" | "failed" | "cancelled";
+            /** Target Worker Id */
+            target_worker_id: string;
+            /** Tc Dice */
+            tc_dice: number | null;
+            /** Title */
+            title: string;
+            /** Total Slices */
+            total_slices: number | null;
+            /** Worker Device Type */
+            worker_device_type: string | null;
+            /** Wt Dice */
+            wt_dice: number | null;
+        };
         /**
          * AdminCreateDoctorRequest
          * @description Create doctor account payload.
@@ -1147,6 +1329,91 @@ export interface components {
             token_type: "bearer";
             user: components["schemas"]["UserOut"];
         };
+        /** BenchmarkCropCaptureOut */
+        BenchmarkCropCaptureOut: {
+            /** Capture Recall */
+            capture_recall: number;
+            /** Gt Wt Voxels */
+            gt_wt_voxels: number;
+            /** Inside Crop Voxels */
+            inside_crop_voxels: number;
+            /** Outside Crop Voxels */
+            outside_crop_voxels: number;
+        };
+        /** BenchmarkDeletionOut */
+        BenchmarkDeletionOut: {
+            /**
+             * Files Cleaned
+             * @default 0
+             */
+            files_cleaned: number;
+            /** Message */
+            message: string;
+            /**
+             * Resource Id
+             * Format: uuid
+             */
+            resource_id: string;
+            /**
+             * Resource Type
+             * @default admin_benchmark
+             * @constant
+             */
+            resource_type: "admin_benchmark";
+            /**
+             * Status
+             * @default deleted
+             * @constant
+             */
+            status: "deleted";
+        };
+        /** BenchmarkMetricsOut */
+        BenchmarkMetricsOut: {
+            /** Best Slice Z */
+            best_slice_z: number;
+            crop_capture?: components["schemas"]["BenchmarkCropCaptureOut"] | null;
+            /** Labels */
+            labels: {
+                [key: string]: components["schemas"]["BenchmarkRegionMetricsOut"];
+            };
+            /** Mean Dice Brats */
+            mean_dice_brats: number;
+            /** Regions */
+            regions: {
+                [key: string]: components["schemas"]["BenchmarkRegionMetricsOut"];
+            };
+            /** Voxel Volume Mm3 */
+            voxel_volume_mm3: number;
+        };
+        /** BenchmarkRegionMetricsOut */
+        BenchmarkRegionMetricsOut: {
+            /** Both Empty */
+            both_empty: boolean;
+            /** Dice */
+            dice: number;
+            /** Fn Voxels */
+            fn_voxels: number;
+            /** Fp Voxels */
+            fp_voxels: number;
+            /** Gt Volume Ml */
+            gt_volume_ml: number;
+            /** Gt Voxels */
+            gt_voxels: number;
+            /** Iou */
+            iou: number;
+            /** Precision */
+            precision: number;
+            /** Pred Volume Ml */
+            pred_volume_ml: number;
+            /** Pred Voxels */
+            pred_voxels: number;
+            /** Recall */
+            recall: number;
+            /** Tp Voxels */
+            tp_voxels: number;
+            /** Volume Diff Ml */
+            volume_diff_ml: number;
+        };
         /** Body_complete_job_api_v1_internal_jobs__job_id__complete_post */
         Body_complete_job_api_v1_internal_jobs__job_id__complete_post: {
             /** Coverage */
@@ -1155,6 +1422,21 @@ export interface components {
             mask: string;
             /** Metadata */
             metadata: string;
+        };
+        /** Body_create_benchmark_api_v1_admin_benchmarks_post */
+        Body_create_benchmark_api_v1_admin_benchmarks_post: {
+            /** Flair */
+            flair: string;
+            /** Gt Mask */
+            gt_mask: string;
+            /** Notes */
+            notes?: string | null;
+            /** T1Ce */
+            t1ce: string;
+            /** Target Worker Id */
+            target_worker_id: string;
+            /** Title */
+            title: string;
         };
         /** Body_save_manual_mask_version_api_v1_cases__case_id__mask_versions_post */
         Body_save_manual_mask_version_api_v1_cases__case_id__mask_versions_post: {
@@ -1600,6 +1882,14 @@ export interface components {
             voxel_volume_mm3: number;
         };
         /**
+         * MaskVersionNoteUpdateRequest
+         * @description Request body for updating the clinical/technical note of a mask version.
+         */
+        MaskVersionNoteUpdateRequest: {
+            /** Note */
+            note?: string | null;
+        };
+        /**
          * MaskVersionOut
          * @description Public representation of an immutable segmentation mask version.
          */
@@ -1664,6 +1954,17 @@ export interface components {
             source: "ai" | "manual";
             /** Version Number */
             version_number: number;
+        };
+        /** PaginatedResponse[AdminBenchmarkSummaryOut] */
+        PaginatedResponse_AdminBenchmarkSummaryOut_: {
+            /** Items */
+            items: components["schemas"]["AdminBenchmarkSummaryOut"][];
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+            /** Total */
+            total: number;
         };
         /** PaginatedResponse[AdminDoctorUserOut] */
         PaginatedResponse_AdminDoctorUserOut_: {
@@ -2208,6 +2509,348 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_benchmarks_api_v1_admin_benchmarks_get: {
+        parameters: {
+            query?: {
+                q?: string | null;
+                state?: ("queued" | "running" | "succeeded" | "failed" | "cancelled") | null;
+                worker_id?: string | null;
+                page?: number;
+                page_size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedResponse_AdminBenchmarkSummaryOut_"];
+                };
+            };
+            /** @description Unauthenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Administrator role required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Benchmark or artifact not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description State conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Invalid NIfTI input or validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    create_benchmark_api_v1_admin_benchmarks_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_create_benchmark_api_v1_admin_benchmarks_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminBenchmarkDetailOut"];
+                };
+            };
+            /** @description Unauthenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Administrator role required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Benchmark or artifact not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description State conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Invalid NIfTI input or validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_benchmark_detail_api_v1_admin_benchmarks__benchmark_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                benchmark_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminBenchmarkDetailOut"];
+                };
+            };
+            /** @description Unauthenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Administrator role required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Benchmark or artifact not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description State conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Invalid NIfTI input or validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    delete_benchmark_api_v1_admin_benchmarks__benchmark_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                benchmark_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BenchmarkDeletionOut"];
+                };
+            };
+            /** @description Unauthenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Administrator role required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Benchmark or artifact not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description State conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Invalid NIfTI input or validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    download_benchmark_artifact_api_v1_admin_benchmarks__benchmark_id__files__artifact__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                benchmark_id: string;
+                artifact: "flair" | "t1ce" | "gt_mask" | "pred_mask";
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Unauthenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Administrator role required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Benchmark or artifact not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description State conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Invalid NIfTI input or validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
         };
@@ -4995,6 +5638,95 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DeletionStatusOut"];
+                };
+            };
+            /** @description Unauthenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden or password change required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Resource not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Payload or quota too large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    update_mask_version_note_api_v1_mask_versions__mask_version_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                mask_version_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MaskVersionNoteUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MaskVersionOut"];
                 };
             };
             /** @description Unauthenticated */

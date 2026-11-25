@@ -14,6 +14,7 @@ import {
   getFixtureMaskVersionMetadata,
   getFixtureMaskVersions,
   saveFixtureMaskVersion,
+  updateFixtureMaskVersionNote,
 } from './fixtures';
 import type {
   DeletionStatusOut,
@@ -35,7 +36,7 @@ export interface SaveManualMaskParams {
   fixtureVolumesMm3?: Record<string, number>;
 }
 
-async function fetchProtectedBinary(
+export async function fetchProtectedBinary(
   path: string,
   options: { signal?: AbortSignal },
 ): Promise<{ response: Response; requestEpoch: number }> {
@@ -136,7 +137,7 @@ async function fetchProtectedBinary(
   return attempt(false);
 }
 
-function assertBinaryRequestCurrent(
+export function assertBinaryRequestCurrent(
   requestEpoch: number,
   signal?: AbortSignal,
 ): void {
@@ -314,6 +315,23 @@ export async function deleteMaskVersion(
     `/mask-versions/${encodeURIComponent(versionId)}`,
     {
       method: 'DELETE',
+    },
+  );
+}
+
+export async function updateMaskVersionNote(
+  versionId: string,
+  note: string | null,
+  options: { fixtureMode?: boolean } = {},
+): Promise<MaskVersionDto> {
+  if (options.fixtureMode) {
+    return updateFixtureMaskVersionNote(versionId, note);
+  }
+  return apiRequest<MaskVersionDto>(
+    `/mask-versions/${encodeURIComponent(versionId)}`,
+    {
+      method: 'PATCH',
+      body: { note },
     },
   );
 }

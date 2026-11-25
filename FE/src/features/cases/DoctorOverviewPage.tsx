@@ -48,9 +48,6 @@ export function DoctorOverviewPage() {
   const items = casesQuery.data?.items ?? [];
   const isStatsUnavailable = casesQuery.isPending || casesQuery.isError;
   const readyCount = items.filter((c) => c.readiness === 'ready').length;
-  const missingCount = items.filter(
-    (c) => c.readiness === 'missing_inputs',
-  ).length;
   const activeJobsCount = items.filter(
     (c) =>
       c.latest_job_state === 'queued' || c.latest_job_state === 'running',
@@ -193,7 +190,7 @@ export function DoctorOverviewPage() {
 
         <div className="refract-panel refract-panel-lift flex flex-col gap-1.5 p-5">
           <p className="text-xs font-medium text-[var(--color-muted)]">
-            Đủ FLAIR + T1ce (Sẵn sàng)
+            Sẵn sàng
           </p>
           <p className="refract-figure text-4xl text-[var(--color-accent-hi)]">
             {isStatsUnavailable ? '—' : readyCount}
@@ -202,10 +199,10 @@ export function DoctorOverviewPage() {
 
         <div className="refract-panel refract-panel-lift flex flex-col gap-1.5 p-5">
           <p className="text-xs font-medium text-[var(--color-muted)]">
-            Thiếu xung / Đang xử lý
+            Đang xử lý
           </p>
           <p className="refract-figure text-4xl text-[var(--color-ink)]">
-            {isStatsUnavailable ? '—' : missingCount + activeJobsCount}
+            {isStatsUnavailable ? '—' : activeJobsCount}
           </p>
         </div>
       </section>
@@ -256,7 +253,7 @@ export function DoctorOverviewPage() {
               onChange={(e) => setStatusFilter(e.target.value)}
             >
               <option value="all">Tất cả trạng thái</option>
-              <option value="ready">Đủ FLAIR + T1ce (Sẵn sàng)</option>
+              <option value="ready">Sẵn sàng</option>
               <option value="missing_inputs">Thiếu xung MRI</option>
               <option value="active_job">Đang xử lý AI</option>
               <option value="invalid">Lỗi dữ liệu MRI</option>

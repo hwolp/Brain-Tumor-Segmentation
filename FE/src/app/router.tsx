@@ -9,6 +9,7 @@ import {
 import { AppShell } from '@/app/AppShell';
 import { getDefaultRouteForUser, useAuthStore } from '@/app/auth-store';
 import { AdminAuditEventsPage } from '@/features/admin/AdminAuditEventsPage';
+import { AdminBenchmarksPage } from '@/features/admin/AdminBenchmarksPage';
 import { AdminJobsPage } from '@/features/admin/AdminJobsPage';
 import { AdminOverviewPage } from '@/features/admin/AdminOverviewPage';
 import { AdminSettingsPage } from '@/features/admin/AdminSettingsPage';
@@ -234,6 +235,7 @@ export function AppRoutes() {
         <Route index element={<AdminOverviewPage />} />
         <Route path="users" element={<AdminUsersPage />} />
         <Route path="jobs" element={<AdminJobsPage />} />
+        <Route path="benchmarks" element={<AdminBenchmarksPage />} />
         <Route path="settings" element={<AdminSettingsPage />} />
         <Route path="audit-events" element={<AdminAuditEventsPage />} />
       </Route>

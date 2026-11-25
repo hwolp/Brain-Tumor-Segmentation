@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import gzip
 import hashlib
 import json
@@ -568,9 +569,11 @@ def _inspect_nifti_file(
 
             max_tile_elems = 1_048_576
             sx, sy, sz = shape
-            z_step = max(1, min(sz, max_tile_elems))
-            y_step = max(1, min(sy, max(1, max_tile_elems // z_step)))
-            x_step = max(1, min(sx, max(1, max_tile_elems // (y_step * z_step))))
+            # NIfTI voxel data is stored in Fortran order (X fastest, then Y, then Z), so walk
+            # contiguous X-first slabs to avoid hundreds of thousands of random seek+read syscalls.
+            x_step = max(1, min(sx, max_tile_elems))
+            y_step = max(1, min(sy, max(1, max_tile_elems // x_step)))
+            z_step = max(1, min(sz, max(1, max_tile_elems // (x_step * y_step))))
 
             for z0 in range(0, sz, z_step):
                 z1 = min(sz, z0 + z_step)
@@ -613,6 +616,37 @@ def _inspect_nifti_file(
             img.uncache()
 
 
+def _decompress_and_inspect_sync(
+    *,
+    staged_path: Path,
+    staging_root: Path,
+    is_gzip: bool,
+    max_decompressed_bytes: int,
+) -> tuple[list[int], list[float], list[list[float]], str, str]:
+    temp_nii: Path | None = None
+    try:
+        if is_gzip:
+            temp_nii = _decompress_gzip_bounded(
+                staged_path,
+                max_decompressed_bytes=max_decompressed_bytes,
+                temp_dir=staging_root,
+            )
+            inspect_path = temp_nii
+        else:
+            inspect_path = staged_path
+
+        return _inspect_nifti_file(
+            inspect_path,
+            max_decompressed_bytes=max_decompressed_bytes,
+        )
+    except Exception:
+        staged_path.unlink(missing_ok=True)
+        raise
+    finally:
+        if temp_nii is not None:
+            temp_nii.unlink(missing_ok=True)
+
+
 async def validate_and_stage_nifti_upload(
     *,
     upload: UploadFile,
@@ -628,28 +662,13 @@ async def validate_and_stage_nifti_upload(
         max_upload_bytes=max_upload_bytes,
     )
 
-    temp_nii: Path | None = None
-    try:
-        if is_gzip:
-            temp_nii = _decompress_gzip_bounded(
-                staged_path,
-                max_decompressed_bytes=max_decompressed_bytes,
-                temp_dir=storage.staging_root,
-            )
-            inspect_path = temp_nii
-        else:
-            inspect_path = staged_path
-
-        shape, spacing_mm, affine, orientation, datatype = _inspect_nifti_file(
-            inspect_path,
-            max_decompressed_bytes=max_decompressed_bytes,
-        )
-    except Exception:
-        staged_path.unlink(missing_ok=True)
-        raise
-    finally:
-        if temp_nii is not None:
-            temp_nii.unlink(missing_ok=True)
+    shape, spacing_mm, affine, orientation, datatype = await asyncio.to_thread(
+        _decompress_and_inspect_sync,
+        staged_path=staged_path,
+        staging_root=storage.staging_root,
+        is_gzip=is_gzip,
+        max_decompressed_bytes=max_decompressed_bytes,
+    )
 
     return ValidatedNiftiUpload(
         staged_file=staged_file,

@@ -1,5 +1,6 @@
 """Version 1 API routers."""
 
+from app.api.v1.admin_benchmarks import router as admin_benchmarks_router
 from app.api.v1.admin_operations import router as admin_operations_router
 from app.api.v1.admin_users import router as admin_users_router
 from app.api.v1.auth import router as auth_router
@@ -14,6 +15,7 @@ from app.api.v1.mask_versions import router as mask_versions_router
 from app.api.v1.patients import router as patients_router
 
 __all__ = [
+    "admin_benchmarks_router",
     "admin_users_router",
     "admin_operations_router",
     "auth_router",

@@ -21,7 +21,11 @@ from app.dependencies import (
 )
 from app.schemas.common import PaginatedResponse
 from app.schemas.error import ErrorResponse
-from app.schemas.mask_version import MaskMetadataExportOut, MaskVersionOut
+from app.schemas.mask_version import (
+    MaskMetadataExportOut,
+    MaskVersionNoteUpdateRequest,
+    MaskVersionOut,
+)
 from app.schemas.patient import DeletionStatusOut
 from app.services.mask_version_service import MaskVersionService
 
@@ -208,6 +212,27 @@ def delete_mask_version(
     return MaskVersionService(db, storage, settings).delete_mask_version(
         doctor_id=doctor.id,
         mask_version_id=mask_version_id,
+        request_id=request_id,
+        ip_address=client_ip,
+    )
+
+
+@router.patch("/mask-versions/{mask_version_id}")
+def update_mask_version_note(
+    mask_version_id: uuid.UUID,
+    payload: MaskVersionNoteUpdateRequest,
+    doctor: DoctorUserDep,
+    db: DbSessionDep,
+    storage: StorageDep,
+    settings: SettingsDep,
+    request_id: RequestIdDep,
+    client_ip: ClientIpDep,
+) -> MaskVersionOut:
+    """Update the note of an active doctor-owned mask version."""
+    return MaskVersionService(db, storage, settings).update_mask_version_note(
+        doctor_id=doctor.id,
+        mask_version_id=mask_version_id,
+        note=payload.note,
         request_id=request_id,
         ip_address=client_ip,
     )
