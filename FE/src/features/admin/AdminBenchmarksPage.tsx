@@ -216,27 +216,34 @@ export function AdminBenchmarksPage() {
   const columns: DataTableColumn<AdminBenchmarkSummaryDto>[] = [
     {
       key: 'title',
-      header: 'Tên bài kiểm định',
+      header: 'Bài kiểm định',
       cell: (row) => (
-        <div className="min-w-[180px]">
-          <p className="font-medium text-[var(--color-ink)]">{row.title}</p>
-          <p className="font-mono text-[11px] text-[var(--color-muted)]">{row.id}</p>
+        <div className="min-w-0 max-w-[155px]">
+          <p title={row.title} className="truncate font-medium text-[var(--color-ink)]">
+            {row.title}
+          </p>
+          <p title={row.id} className="truncate font-mono text-[11px] text-[var(--color-muted)]">
+            {row.id}
+          </p>
         </div>
       ),
     },
     {
       key: 'worker',
       header: 'AI Worker',
-      cellClassName: 'whitespace-nowrap',
-      cell: (row) => (
-        <div className="text-xs">
-          <p className="font-mono font-medium">{row.target_worker_id}</p>
-          <p className="text-[var(--text-secondary)]">
-            {row.worker_device_type ?? '—'}
-            {row.model_version_id ? ` · ${row.model_version_id}` : ''}
-          </p>
-        </div>
-      ),
+      cell: (row) => {
+        const metaText = `${row.worker_device_type ?? '—'}${row.model_version_id ? ` · ${row.model_version_id}` : ''}`;
+        return (
+          <div className="max-w-[120px] text-xs">
+            <p title={row.target_worker_id} className="truncate font-mono font-medium">
+              {row.target_worker_id}
+            </p>
+            <p title={metaText} className="truncate text-[var(--text-secondary)]">
+              {metaText}
+            </p>
+          </div>
+        );
+      },
     },
     {
       key: 'state',
@@ -260,34 +267,35 @@ export function AdminBenchmarksPage() {
       },
     },
     {
-      key: 'mean_dice',
-      header: 'Mean Dice',
+      key: 'dice',
+      header: 'Dice (BraTS)',
       align: 'right',
-      cellClassName: 'whitespace-nowrap font-mono tabular-nums',
-      cell: (row) => formatDiceCell(row.mean_dice_brats),
-    },
-    {
-      key: 'regions',
-      header: 'WT / TC / ET',
-      align: 'right',
-      cellClassName: 'whitespace-nowrap font-mono text-xs tabular-nums',
-      cell: (row) =>
-        row.wt_dice !== null
-          ? `${formatDiceCell(row.wt_dice)} / ${formatDiceCell(row.tc_dice)} / ${formatDiceCell(row.et_dice)}`
-          : '—',
-    },
-    {
-      key: 'duration',
-      header: 'Thời gian',
-      align: 'right',
-      cellClassName: 'whitespace-nowrap font-mono text-xs tabular-nums',
-      cell: (row) => formatDurationCell(row.inference_duration_ms),
+      cellClassName: 'whitespace-nowrap',
+      cell: (row) => (
+        <div className="flex flex-col items-end font-mono tabular-nums">
+          <span className="font-medium text-[var(--color-ink)]">
+            {formatDiceCell(row.mean_dice_brats)}
+          </span>
+          <span className="text-[11px] text-[var(--text-secondary)]">
+            {row.wt_dice !== null
+              ? `${formatDiceCell(row.wt_dice)} / ${formatDiceCell(row.tc_dice)} / ${formatDiceCell(row.et_dice)}`
+              : '—'}
+          </span>
+        </div>
+      ),
     },
     {
       key: 'created_at',
-      header: 'Ngày tạo',
+      header: 'Thời gian',
       cellClassName: 'whitespace-nowrap text-xs tabular-nums',
-      cell: (row) => formatDateTimeVN(row.created_at),
+      cell: (row) => (
+        <div className="flex flex-col gap-0.5">
+          <span>{formatDateTimeVN(row.created_at)}</span>
+          <span className="font-mono text-[11px] text-[var(--text-secondary)]">
+            Suy luận: {formatDurationCell(row.inference_duration_ms)}
+          </span>
+        </div>
+      ),
     },
     {
       key: 'actions',
@@ -297,20 +305,20 @@ export function AdminBenchmarksPage() {
       cell: (row) => (
         <div className="flex items-center justify-end gap-1.5">
           <Button
-            size="sm"
+            size="xs"
             variant={selectedId === row.id ? 'primary' : 'outline'}
             onClick={() => setSelectedId(row.id)}
           >
             Xem kết quả
           </Button>
           <Button
-            size="sm"
+            size="xs"
             variant="outline"
             disabled={row.state === 'running'}
             aria-label={`Xóa ${row.title}`}
             onClick={() => setDeleteTarget(row)}
           >
-            <Trash2 className="size-4" aria-hidden="true" />
+            <Trash2 className="size-3.5" aria-hidden="true" />
             Xóa
           </Button>
         </div>

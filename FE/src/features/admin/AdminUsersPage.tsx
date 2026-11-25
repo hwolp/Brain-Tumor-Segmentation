@@ -234,20 +234,28 @@ export function AdminUsersPage() {
       header: 'Tên đăng nhập',
       cellClassName: 'whitespace-nowrap',
       cell: (row) => (
-        <span className="font-mono font-semibold">{row.username}</span>
+        <span
+          title={row.username}
+          className="block max-w-[124px] truncate font-mono font-semibold"
+        >
+          {row.username}
+        </span>
       ),
     },
     {
       key: 'display_name',
-      header: 'Họ và tên hiển thị',
-      cell: (row) => row.display_name,
+      header: 'Họ và tên',
+      cell: (row) => (
+        <span title={row.display_name} className="block max-w-[155px] truncate">
+          {row.display_name}
+        </span>
+      ),
     },
     {
       key: 'status',
       header: 'Trạng thái',
-      cellClassName: 'whitespace-nowrap',
       cell: (row) => (
-        <div className="flex flex-nowrap items-center gap-1.5 whitespace-nowrap">
+        <div className="flex flex-wrap items-center gap-1.5">
           <StatusBadge
             label={row.is_active ? 'Hoạt động' : 'Đã khóa'}
             tone={row.is_active ? 'success' : 'error'}
@@ -263,7 +271,7 @@ export function AdminUsersPage() {
       header: 'Ngày tạo',
       cellClassName: 'whitespace-nowrap',
       cell: (row) => (
-        <span className="tabular-nums">{formatDateTimeVN(row.created_at)}</span>
+        <span className="text-xs tabular-nums">{formatDateTimeVN(row.created_at)}</span>
       ),
     },
     {
@@ -275,16 +283,16 @@ export function AdminUsersPage() {
         <div className="flex flex-nowrap items-center justify-end gap-1.5 whitespace-nowrap">
           <Button
             variant="outline"
-            size="sm"
+            size="xs"
             onClick={() => setEditingUser(row)}
           >
-            <Pencil className="size-4" aria-hidden="true" />
+            <Pencil className="size-3.5" aria-hidden="true" />
             Sửa tên
           </Button>
           <Button
             variant="outline"
-            size="sm"
-            className="min-w-[104px]"
+            size="xs"
+            className="min-w-[84px]"
             onClick={() => {
               setConfirmError(null);
               setToggleTargetUser(row);
@@ -292,25 +300,25 @@ export function AdminUsersPage() {
           >
             {row.is_active ? (
               <>
-                <Lock className="size-4" aria-hidden="true" />
+                <Lock className="size-3.5" aria-hidden="true" />
                 Khóa
               </>
             ) : (
               <>
-                <Unlock className="size-4" aria-hidden="true" />
+                <Unlock className="size-3.5" aria-hidden="true" />
                 Mở khóa
               </>
             )}
           </Button>
           <Button
             variant="outline"
-            size="sm"
+            size="xs"
             onClick={() => {
               setConfirmError(null);
               setResetTargetUser(row);
             }}
           >
-            <KeyRound className="size-4" aria-hidden="true" />
+            <KeyRound className="size-3.5" aria-hidden="true" />
             Đặt lại mật khẩu
           </Button>
         </div>

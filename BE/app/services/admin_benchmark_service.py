@@ -839,7 +839,10 @@ class AdminBenchmarkService:
         metadata_file: BinaryIO,
         request_id: str,
     ) -> InferenceJobOut | None:
-        from app.services.inference_job_service import _validate_worker_result_metadata
+        from app.services.inference_job_service import (
+            _validate_worker_result_metadata,
+            resolve_final_slice_counts,
+        )
 
         probe = self.benchmarks.get_by_id(job_id)
         if probe is None:
@@ -1037,6 +1040,7 @@ class AdminBenchmarkService:
                 else None
             )
 
+            final_completed, final_total = resolve_final_slice_counts(coverage_json, ref_shape)
             run.pred_mask_file_id = db_mask.id
             run.coverage_file_id = db_coverage.id
             run.coverage_json = coverage_json
@@ -1044,6 +1048,8 @@ class AdminBenchmarkService:
             run.inference_duration_ms = duration_ms
             run.state = "succeeded"
             run.stage = "done"
+            run.completed_slices = final_completed
+            run.total_slices = final_total
             run.finished_at = now
             run.result_digest = digest
             run.error_code = None

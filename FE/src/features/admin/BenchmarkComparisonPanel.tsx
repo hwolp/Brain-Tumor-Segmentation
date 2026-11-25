@@ -513,39 +513,42 @@ export function BenchmarkComparisonPanel({
           </div>
 
           <div className="overflow-x-auto rounded-[var(--radius-inner)] border border-[var(--color-rule)]">
-            <table className="w-full min-w-[760px] border-collapse text-left text-sm">
+            <table className="w-full border-collapse text-left text-[13px]">
               <thead className="border-b border-[var(--color-rule)] bg-[var(--color-paper-2)]/75">
                 <tr>
-                  <th className="px-3.5 py-2.5 text-xs font-medium text-[var(--color-ink-2)]">
-                    Vùng / Nhãn đối chiếu
+                  <th className="px-2 py-2 sm:px-2.5 text-xs font-medium text-[var(--color-ink-2)]">
+                    Vùng / Nhãn
                   </th>
-                  <th className="px-3.5 py-2.5 text-right text-xs font-medium text-[var(--color-ink-2)]">
+                  <th className="whitespace-nowrap px-2 py-2 sm:px-2.5 text-right text-xs font-medium text-[var(--color-ink-2)]">
                     Dice
                   </th>
-                  <th className="px-3.5 py-2.5 text-right text-xs font-medium text-[var(--color-ink-2)]">
+                  <th className="whitespace-nowrap px-2 py-2 sm:px-2.5 text-right text-xs font-medium text-[var(--color-ink-2)]">
                     IoU
                   </th>
-                  <th className="px-3.5 py-2.5 text-right text-xs font-medium text-[var(--color-ink-2)]">
+                  <th className="whitespace-nowrap px-2 py-2 sm:px-2.5 text-right text-xs font-medium text-[var(--color-ink-2)]">
                     Precision
                   </th>
-                  <th className="px-3.5 py-2.5 text-right text-xs font-medium text-[var(--color-ink-2)]">
+                  <th className="whitespace-nowrap px-2 py-2 sm:px-2.5 text-right text-xs font-medium text-[var(--color-ink-2)]">
                     Recall
                   </th>
-                  <th className="px-3.5 py-2.5 text-right text-xs font-medium text-[var(--color-ink-2)]">
+                  <th className="whitespace-nowrap px-2 py-2 sm:px-2.5 text-right text-xs font-medium text-[var(--color-ink-2)]">
                     GT (mL)
                   </th>
-                  <th className="px-3.5 py-2.5 text-right text-xs font-medium text-[var(--color-ink-2)]">
+                  <th className="whitespace-nowrap px-2 py-2 sm:px-2.5 text-right text-xs font-medium text-[var(--color-ink-2)]">
                     AI (mL)
                   </th>
-                  <th className="px-3.5 py-2.5 text-right text-xs font-medium text-[var(--color-ink-2)]">
-                    Chênh lệch (mL)
+                  <th
+                    title="Chênh lệch thể tích AI - GT (mL)"
+                    className="whitespace-nowrap px-2 py-2 sm:px-2.5 text-right text-xs font-medium text-[var(--color-ink-2)]"
+                  >
+                    Lệch (mL)
                   </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--color-rule-2)]">
                 {metricRows.map(({ key, label, data }) => (
                   <tr key={key}>
-                    <td className="px-3.5 py-2.5 font-medium text-[var(--color-ink)]">
+                    <td className="px-2 py-2 sm:px-2.5 font-medium text-[var(--color-ink)]">
                       <span>{label}</span>
                       {data.both_empty && (
                         <span className="ml-2 rounded bg-[var(--color-paper-2)] px-1.5 py-0.5 text-[11px] text-[var(--color-muted)]">
@@ -553,25 +556,25 @@ export function BenchmarkComparisonPanel({
                         </span>
                       )}
                     </td>
-                    <td className="px-3.5 py-2.5 text-right font-mono tabular-nums">
+                    <td className="whitespace-nowrap px-2 py-2 sm:px-2.5 text-right font-mono text-xs tabular-nums">
                       {data.dice.toFixed(4)}
                     </td>
-                    <td className="px-3.5 py-2.5 text-right font-mono tabular-nums">
+                    <td className="whitespace-nowrap px-2 py-2 sm:px-2.5 text-right font-mono text-xs tabular-nums">
                       {data.iou.toFixed(4)}
                     </td>
-                    <td className="px-3.5 py-2.5 text-right font-mono tabular-nums">
+                    <td className="whitespace-nowrap px-2 py-2 sm:px-2.5 text-right font-mono text-xs tabular-nums">
                       {data.precision.toFixed(4)}
                     </td>
-                    <td className="px-3.5 py-2.5 text-right font-mono tabular-nums">
+                    <td className="whitespace-nowrap px-2 py-2 sm:px-2.5 text-right font-mono text-xs tabular-nums">
                       {data.recall.toFixed(4)}
                     </td>
-                    <td className="px-3.5 py-2.5 text-right font-mono tabular-nums">
+                    <td className="whitespace-nowrap px-2 py-2 sm:px-2.5 text-right font-mono text-xs tabular-nums">
                       {data.gt_volume_ml.toFixed(2)}
                     </td>
-                    <td className="px-3.5 py-2.5 text-right font-mono tabular-nums">
+                    <td className="whitespace-nowrap px-2 py-2 sm:px-2.5 text-right font-mono text-xs tabular-nums">
                       {data.pred_volume_ml.toFixed(2)}
                     </td>
-                    <td className="px-3.5 py-2.5 text-right font-mono tabular-nums">
+                    <td className="whitespace-nowrap px-2 py-2 sm:px-2.5 text-right font-mono text-xs tabular-nums">
                       {data.volume_diff_ml >= 0 ? `+${data.volume_diff_ml.toFixed(2)}` : data.volume_diff_ml.toFixed(2)}
                     </td>
                   </tr>

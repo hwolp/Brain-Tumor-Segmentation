@@ -168,34 +168,60 @@ export function AdminJobsPage() {
       key: 'id',
       header: 'Job ID',
       cellClassName: 'whitespace-nowrap',
-      cell: (row) => <span className="font-mono text-xs">{row.id}</span>,
+      cell: (row) => (
+        <span title={row.id} className="block max-w-[96px] truncate font-mono text-xs">
+          {row.id}
+        </span>
+      ),
     },
     {
       key: 'doctor_username',
       header: 'Tài khoản gửi',
       cellClassName: 'whitespace-nowrap',
-      cell: (row) => <span className="font-mono">@{row.doctor_username}</span>,
+      cell: (row) => (
+        <span
+          title={`@${row.doctor_username}`}
+          className="block max-w-[116px] truncate font-mono text-xs"
+        >
+          @{row.doctor_username}
+        </span>
+      ),
     },
     {
       key: 'model_version',
       header: 'Model',
       cellClassName: 'whitespace-nowrap',
-      cell: (row) => <span className="font-mono text-xs">{row.model_version}</span>,
+      cell: (row) => (
+        <span
+          title={row.model_version}
+          className="block max-w-[110px] truncate font-mono text-xs"
+        >
+          {row.model_version}
+        </span>
+      ),
     },
     {
       key: 'state',
       header: 'Trạng thái',
-      cellClassName: 'whitespace-nowrap',
       cell: (row) => {
         const meta = getJobStateMeta(row.state);
-        return <StatusBadge label={meta.label} tone={meta.tone} />;
+        return (
+          <div className="flex flex-col items-start gap-0.5">
+            <StatusBadge label={meta.label} tone={meta.tone} />
+            <span className="text-[11px] text-[var(--text-secondary)]">
+              {formatJobStage(row.stage)}
+            </span>
+            {row.error_code && (
+              <span
+                title={row.error_code}
+                className="block max-w-[160px] truncate font-mono text-[11px] text-[var(--status-error)]"
+              >
+                {row.error_code}
+              </span>
+            )}
+          </div>
+        );
       },
-    },
-    {
-      key: 'stage',
-      header: 'Giai đoạn',
-      cellClassName: 'whitespace-nowrap',
-      cell: (row) => formatJobStage(row.stage),
     },
     {
       key: 'attempt_count',
@@ -205,21 +231,11 @@ export function AdminJobsPage() {
       cell: (row) => <span className="tabular-nums">{row.attempt_count}</span>,
     },
     {
-      key: 'error_code',
-      header: 'Mã lỗi kỹ thuật',
-      cellClassName: 'whitespace-nowrap',
-      cell: (row) => (
-        <span className="font-mono text-xs text-[var(--text-secondary)]">
-          {row.error_code ?? '—'}
-        </span>
-      ),
-    },
-    {
       key: 'created_at',
       header: 'Thời gian tạo',
       cellClassName: 'whitespace-nowrap',
       cell: (row) => (
-        <span className="tabular-nums">{formatDateTimeVN(row.created_at)}</span>
+        <span className="text-xs tabular-nums">{formatDateTimeVN(row.created_at)}</span>
       ),
     },
     {
@@ -231,7 +247,7 @@ export function AdminJobsPage() {
         <div className="flex flex-nowrap items-center justify-end gap-1.5 whitespace-nowrap">
           <Button
             variant="outline"
-            size="sm"
+            size="xs"
             onClick={() => setDetailJobId(row.id)}
           >
             Chi tiết
@@ -239,13 +255,13 @@ export function AdminJobsPage() {
           {row.state === 'failed' && (
             <Button
               variant="outline"
-              size="sm"
+              size="xs"
               onClick={() => {
                 retryMutation.reset();
                 setRetryTarget(row);
               }}
             >
-              <RotateCcw className="size-4" aria-hidden="true" />
+              <RotateCcw className="size-3.5" aria-hidden="true" />
               Gửi lại
             </Button>
           )}

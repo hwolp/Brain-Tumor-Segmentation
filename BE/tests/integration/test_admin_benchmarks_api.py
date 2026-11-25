@@ -188,6 +188,8 @@ def _coverage_bytes() -> bytes:
     payload = {
         "original_shape": list(_CASE_SHAPE),
         "pipeline_version": "tda-test-v1",
+        "total_slices": _CASE_SHAPE[2],
+        "evaluated_slices": _CASE_SHAPE[2],
         "slice_crops": crops,
     }
     return json.dumps(payload).encode("utf-8")
@@ -387,6 +389,8 @@ def test_benchmark_worker_targeting_isolation_e2e_scoring_and_delete(
     )
     assert complete_resp.status_code == 200, complete_resp.text
     assert complete_resp.json()["job"]["state"] == "succeeded"
+    assert complete_resp.json()["job"]["completed_slices"] == 155
+    assert complete_resp.json()["job"]["total_slices"] == 155
 
     # Detail contains scored metrics & best slice
     detail_resp = bench_client.get(
@@ -395,6 +399,8 @@ def test_benchmark_worker_targeting_isolation_e2e_scoring_and_delete(
     assert detail_resp.status_code == 200
     detail = detail_resp.json()
     assert detail["state"] == "succeeded"
+    assert detail["completed_slices"] == 155
+    assert detail["total_slices"] == 155
     assert detail["has_pred_mask"] is True
     assert detail["mean_dice_brats"] == 1.0
     assert detail["metrics"]["best_slice_z"] == 70

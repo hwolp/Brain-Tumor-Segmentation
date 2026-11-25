@@ -196,6 +196,7 @@ export function PatientDetailPage() {
     {
       key: 'study_date',
       header: 'Ngày chụp',
+      cellClassName: 'whitespace-nowrap',
       cell: (row) => (
         <span className="font-medium tabular-nums">
           {formatStudyDate(row.study_date)}
@@ -205,6 +206,7 @@ export function PatientDetailPage() {
     {
       key: 'readiness',
       header: 'Trạng thái dữ liệu',
+      cellClassName: 'whitespace-nowrap',
       cell: (row) => {
         const meta = getCaseReadinessMeta(row.readiness);
         return <StatusBadge label={meta.label} tone={meta.tone} />;
@@ -214,7 +216,10 @@ export function PatientDetailPage() {
       key: 'notes',
       header: 'Ghi chú ca chụp',
       cell: (row) => (
-        <span className="line-clamp-2 max-w-md text-[var(--text-secondary)]">
+        <span
+          title={row.notes || undefined}
+          className="line-clamp-2 max-w-[260px] text-[var(--text-secondary)]"
+        >
           {row.notes || 'Không có ghi chú'}
         </span>
       ),
@@ -222,27 +227,29 @@ export function PatientDetailPage() {
     {
       key: 'updated_at',
       header: 'Cập nhật',
+      cellClassName: 'whitespace-nowrap text-xs tabular-nums',
       cell: (row) => formatDateTimeVN(row.updated_at),
     },
     {
       key: 'actions',
       header: 'Thao tác',
       align: 'right',
+      cellClassName: 'whitespace-nowrap',
       cell: (row) => (
         <div className="flex flex-nowrap items-center justify-end gap-1.5 whitespace-nowrap">
           <Link
             to={`/doctor/cases/${row.id}/viewer`}
-            className={buttonVariants({ variant: 'outline', size: 'sm' })}
+            className={buttonVariants({ variant: 'outline', size: 'xs' })}
           >
-            <Eye className="size-4" aria-hidden="true" />
+            <Eye className="size-3.5" aria-hidden="true" />
             Viewer
           </Link>
           <Link
             to={`/doctor/cases/${row.id}`}
-            className={buttonVariants({ variant: 'primary', size: 'sm' })}
+            className={buttonVariants({ variant: 'primary', size: 'xs' })}
           >
             Chi tiết ca
-            <ArrowRight className="size-4" aria-hidden="true" />
+            <ArrowRight className="size-3.5" aria-hidden="true" />
           </Link>
         </div>
       ),

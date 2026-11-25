@@ -168,9 +168,10 @@ export function PatientsListPage() {
   const columns: DataTableColumn<PatientDto>[] = [
     {
       key: 'patient_code',
-      header: 'Mã bệnh nhân',
+      header: 'Mã BN',
+      cellClassName: 'whitespace-nowrap',
       cell: (row) => (
-        <span className="font-mono text-sm font-semibold text-[var(--text-primary)]">
+        <span className="font-mono text-xs font-semibold text-[var(--text-primary)]">
           {row.patient_code}
         </span>
       ),
@@ -178,53 +179,62 @@ export function PatientsListPage() {
     {
       key: 'full_name',
       header: 'Họ và tên',
-      cell: (row) => <span className="font-medium">{row.full_name}</span>,
+      cell: (row) => (
+        <span title={row.full_name} className="block max-w-[155px] truncate font-medium">
+          {row.full_name}
+        </span>
+      ),
     },
     {
       key: 'birth_year',
       header: 'Năm sinh',
       align: 'center',
+      cellClassName: 'whitespace-nowrap',
       cell: (row) => <span className="tabular-nums">{row.birth_year}</span>,
     },
     {
       key: 'sex',
       header: 'Giới tính',
       align: 'center',
+      cellClassName: 'whitespace-nowrap',
       cell: (row) => formatPatientSex(row.sex),
     },
     {
       key: 'case_count',
-      header: 'Số ca chụp',
+      header: 'Ca chụp',
       align: 'center',
+      cellClassName: 'whitespace-nowrap',
       cell: (row) => (
-        <span className="font-mono text-sm font-medium tabular-nums text-[var(--text-primary)]">
+        <span className="font-mono text-xs font-medium tabular-nums text-[var(--text-primary)]">
           {row.case_count ?? 0}
         </span>
       ),
     },
     {
       key: 'updated_at',
-      header: 'Cập nhật gần nhất',
+      header: 'Cập nhật',
+      cellClassName: 'whitespace-nowrap text-xs tabular-nums',
       cell: (row) => formatDateTimeVN(row.updated_at),
     },
     {
       key: 'actions',
       header: 'Thao tác',
       align: 'right',
+      cellClassName: 'whitespace-nowrap',
       cell: (row) => (
         <div className="flex flex-nowrap items-center justify-end gap-1.5 whitespace-nowrap">
           <Button
             variant="outline"
-            size="sm"
+            size="xs"
             onClick={() => setEditingPatient(row)}
             aria-label={`Sửa hồ sơ ${row.patient_code}`}
           >
-            <Pencil className="size-4" aria-hidden="true" />
+            <Pencil className="size-3.5" aria-hidden="true" />
             Sửa
           </Button>
           <Button
             variant="outline"
-            size="sm"
+            size="xs"
             className="hover:border-[var(--status-error-border)] hover:bg-[var(--status-error-bg)] hover:text-[var(--status-error)]"
             onClick={() => {
               setDeleteError(null);
@@ -232,15 +242,15 @@ export function PatientsListPage() {
             }}
             aria-label={`Xóa hồ sơ ${row.patient_code}`}
           >
-            <Trash2 className="size-4" aria-hidden="true" />
+            <Trash2 className="size-3.5" aria-hidden="true" />
             Xóa
           </Button>
           <Link
             to={`/doctor/patients/${row.id}`}
-            className={buttonVariants({ variant: 'primary', size: 'sm' })}
+            className={buttonVariants({ variant: 'primary', size: 'xs' })}
           >
             Xem hồ sơ
-            <ArrowRight className="size-4" aria-hidden="true" />
+            <ArrowRight className="size-3.5" aria-hidden="true" />
           </Link>
         </div>
       ),

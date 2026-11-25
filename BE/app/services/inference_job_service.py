@@ -159,6 +159,27 @@ def sync_active_model(db: Session, settings: Settings) -> ModelVersion:
     return row
 
 
+def resolve_final_slice_counts(
+    coverage_json: dict[str, Any],
+    ref_shape: list[int],
+) -> tuple[int, int]:
+    """Resolve `(completed_slices, total_slices)` from coverage metadata or volume depth."""
+    fallback_total = max(1, int(ref_shape[2]))
+    raw_total = coverage_json.get("total_slices")
+    final_total = (
+        int(raw_total)
+        if not isinstance(raw_total, bool) and isinstance(raw_total, int) and raw_total > 0
+        else fallback_total
+    )
+    raw_eval = coverage_json.get("evaluated_slices")
+    final_completed = (
+        int(raw_eval)
+        if not isinstance(raw_eval, bool) and isinstance(raw_eval, int) and raw_eval >= 0
+        else final_total
+    )
+    return min(final_completed, final_total), final_total
+
+
 def _get_job_out(job: InferenceJob) -> InferenceJobOut:
     return InferenceJobOut.model_validate(job)
 
@@ -1114,14 +1135,19 @@ class InferenceJobService:
             self.db.flush()
             case.latest_mask_version_id = version.id
             case.inputs_locked_at = case.inputs_locked_at or datetime.now(UTC)
+            final_completed, final_total = resolve_final_slice_counts(coverage_json, ref_shape)
             job.state = "succeeded"
             job.stage = "done"
+            job.completed_slices = final_completed
+            job.total_slices = final_total
             job.finished_at = datetime.now(UTC)
             job.result_mask_version_id = version.id
             job.result_digest = digest
             job.error_code = None
             attempt.state = "succeeded"
             attempt.stage = "done"
+            attempt.completed_slices = final_completed
+            attempt.total_slices = final_total
             attempt.finished_at = datetime.now(UTC)
             worker = self.db.get(WorkerInstance, worker_id)
             if worker is not None:

@@ -100,24 +100,34 @@ export function AdminAuditEventsPage() {
       header: 'Thời gian',
       cellClassName: 'whitespace-nowrap',
       cell: (row) => (
-        <span className="tabular-nums">{formatDateTimeVN(row.created_at)}</span>
+        <span className="text-xs tabular-nums">{formatDateTimeVN(row.created_at)}</span>
       ),
     },
     {
       key: 'actor_username',
       header: 'Người thực hiện',
       cellClassName: 'whitespace-nowrap',
-      cell: (row) => <span className="font-mono">@{row.actor_username}</span>,
+      cell: (row) => (
+        <span
+          title={`@${row.actor_username}`}
+          className="block max-w-[116px] truncate font-mono text-xs"
+        >
+          @{row.actor_username}
+        </span>
+      ),
     },
     {
       key: 'action',
       header: 'Hành động',
       cell: (row) => (
-        <div className="flex flex-col gap-0.5">
+        <div className="flex min-w-0 flex-col gap-0.5">
           <span className="font-medium text-[var(--text-primary)]">
             {formatAuditActionLabel(row.action)}
           </span>
-          <span className="font-mono text-xs text-[var(--text-secondary)]">
+          <span
+            title={row.action}
+            className="block max-w-[180px] truncate font-mono text-xs text-[var(--text-secondary)]"
+          >
             {row.action}
           </span>
         </div>
@@ -125,9 +135,13 @@ export function AdminAuditEventsPage() {
     },
     {
       key: 'target_id',
-      header: 'Đối tượng (ID)',
+      header: 'Đối tượng',
       cellClassName: 'whitespace-nowrap',
-      cell: (row) => <span className="font-mono text-xs">{row.target_id}</span>,
+      cell: (row) => (
+        <span title={row.target_id} className="block max-w-[104px] truncate font-mono text-xs">
+          {row.target_id}
+        </span>
+      ),
     },
     {
       key: 'outcome',
@@ -145,7 +159,10 @@ export function AdminAuditEventsPage() {
       header: 'Request ID',
       cellClassName: 'whitespace-nowrap',
       cell: (row) => (
-        <span className="font-mono text-xs text-[var(--text-secondary)]">
+        <span
+          title={row.request_id}
+          className="block max-w-[104px] truncate font-mono text-xs text-[var(--text-secondary)]"
+        >
           {row.request_id}
         </span>
       ),

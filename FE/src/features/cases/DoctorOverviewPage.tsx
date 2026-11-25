@@ -91,10 +91,11 @@ export function DoctorOverviewPage() {
     {
       key: 'patient_code',
       header: 'Mã BN',
+      cellClassName: 'whitespace-nowrap',
       cell: (row) => (
         <Link
           to={`/doctor/patients/${row.patient_id}`}
-          className="font-mono text-sm font-semibold text-[var(--action-primary)] hover:underline"
+          className="font-mono text-xs font-semibold text-[var(--action-primary)] hover:underline"
         >
           {row.patient_code ?? row.patient_id.slice(0, 8)}
         </Link>
@@ -103,6 +104,7 @@ export function DoctorOverviewPage() {
     {
       key: 'study_date',
       header: 'Ngày chụp',
+      cellClassName: 'whitespace-nowrap',
       cell: (row) => (
         <span className="tabular-nums">{formatStudyDate(row.study_date)}</span>
       ),
@@ -110,6 +112,7 @@ export function DoctorOverviewPage() {
     {
       key: 'readiness',
       header: 'Dữ liệu MRI',
+      cellClassName: 'whitespace-nowrap',
       cell: (row) => {
         const meta = getCaseReadinessMeta(row.readiness);
         return <StatusBadge label={meta.label} tone={meta.tone} />;
@@ -118,6 +121,7 @@ export function DoctorOverviewPage() {
     {
       key: 'job_state',
       header: 'Tác vụ AI',
+      cellClassName: 'whitespace-nowrap',
       cell: (row) => {
         if (!row.latest_job_state) {
           return <StatusBadge label="Chưa chạy AI" tone="neutral" />;
@@ -129,27 +133,29 @@ export function DoctorOverviewPage() {
     {
       key: 'updated_at',
       header: 'Cập nhật',
+      cellClassName: 'whitespace-nowrap text-xs tabular-nums',
       cell: (row) => formatDateTimeVN(row.updated_at),
     },
     {
       key: 'actions',
       header: 'Thao tác',
       align: 'right',
+      cellClassName: 'whitespace-nowrap',
       cell: (row) => (
         <div className="flex flex-nowrap items-center justify-end gap-1.5 whitespace-nowrap">
           <Link
             to={`/doctor/cases/${row.id}/viewer`}
-            className={buttonVariants({ variant: 'outline', size: 'sm' })}
+            className={buttonVariants({ variant: 'outline', size: 'xs' })}
           >
-            <Eye className="size-4" aria-hidden="true" />
+            <Eye className="size-3.5" aria-hidden="true" />
             Mở Viewer
           </Link>
           <Link
             to={`/doctor/cases/${row.id}`}
-            className={buttonVariants({ variant: 'primary', size: 'sm' })}
+            className={buttonVariants({ variant: 'primary', size: 'xs' })}
           >
             Chi tiết
-            <ArrowRight className="size-4" aria-hidden="true" />
+            <ArrowRight className="size-3.5" aria-hidden="true" />
           </Link>
         </div>
       ),
